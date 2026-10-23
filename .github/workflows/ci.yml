@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: voting
+          POSTGRES_PASSWORD: voting
+          POSTGRES_DB: voting
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U voting"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check web
+        run: npx tsc -b -w web
+
+      - name: Build all workspaces
+        run: npm run build
+
+      - name: Prisma migrate
+        working-directory: server
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://voting:voting@localhost:5432/voting?schema=public
+
+      - name: Server integration tests
+        working-directory: server
+        run: npm test
+        env:
+          DATABASE_URL: postgresql://voting:voting@localhost:5432/voting?schema=public
+          NODE_ENV: test
+
+      - name: Install Playwright browser
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+
+      - name: Seed database for E2E
+        working-directory: server
+        run: npm run seed
+        env:
+          DATABASE_URL: postgresql://voting:voting@localhost:5432/voting?schema=public
+
+      - name: Run E2E (Playwright boots API + web)
+        working-directory: web
+        run: npx playwright test
+        env:
+          CI: "true"
+          DATABASE_URL: postgresql://voting:voting@localhost:5432/voting?schema=public
+
+      - name: Upload Playwright artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: web/test-results/
+          retention-days: 7

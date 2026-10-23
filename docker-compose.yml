@@ -1,0 +1,41 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: voting
+      POSTGRES_PASSWORD: voting
+      POSTGRES_DB: voting
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U voting"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://voting:voting@postgres:5432/voting?schema=public
+      REDIS_URL: redis://redis:6379
+      PORT: 4000
+      NODE_ENV: production
+      WEB_ORIGIN: http://localhost:5173
+    ports:
+      - "4000:4000"
+    command: sh -c "npx prisma migrate deploy --schema prisma/schema.prisma && npx prisma db seed && npx tsx src/index.ts"
+
+volumes:
+  pgdata:

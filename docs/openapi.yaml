@@ -1,0 +1,397 @@
+openapi: 3.0.3
+info:
+  title: TeamVote API
+  version: 0.1.0
+  description: >
+    Real-time team voting & evaluation system API. All requests are under /api.
+    Auth uses an httpOnly session cookie; mutating requests additionally require
+    the double-submit CSRF header (X-CSRF-Token) whose value matches the csrf
+    cookie. Roles: ADMIN, MODERATOR (assigned rooms only), PARTICIPANT.
+servers:
+  - url: http://localhost:4000/api
+tags:
+  - name: auth
+  - name: participants
+  - name: teams
+  - name: rooms
+  - name: categories
+  - name: rounds
+  - name: votes
+  - name: results
+  - name: audit
+  - name: realtime
+paths:
+  /health:
+    get:
+      tags: [auth]
+      summary: Liveness probe
+      responses:
+        "200": { description: OK }
+  /auth/csrf:
+    get:
+      tags: [auth]
+      summary: Bootstrap session + csrf cookie (or rotate token)
+      responses:
+        "200": { description: "sets csrf + session cookies" }
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Login (identity = username or email)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identifier, password]
+              properties:
+                identifier: { type: string }
+                password: { type: string }
+      responses:
+        "200": { description: logged in }
+        "401": { description: invalid credentials }
+        "423": { description: account locked (5 failures / 15 min) }
+  /auth/logout:
+    post:
+      tags: [auth]
+      summary: Revoke current session
+      responses:
+        "200": { description: OK }
+  /auth/me:
+    get:
+      tags: [auth]
+      summary: Current user
+      responses:
+        "200": { description: user or null }
+  /auth/password:
+    post:
+      tags: [auth]
+      summary: Change own password (honours mustChangePassword flow)
+      responses:
+        "200": { description: OK }
+        "400": { description: policy failure }
+  /auth/reset:
+    post:
+      tags: [auth]
+      summary: Admin resets a participant's password (temporary, audited)
+      responses:
+        "200": { description: temp password issued }
+
+  /participants:
+    get:
+      tags: [participants]
+      summary: List participants (admin)
+      responses:
+        "200": { description: participants }
+        "403": { description: no permission }
+    post:
+      tags: [participants]
+      summary: Create participant or moderator (admin)
+      responses:
+        "201": { description: created }
+  /participants/{id}:
+    patch:
+      tags: [participants]
+      summary: Update participant (name, team, status, credentials issuance)
+      responses:
+        "200": { description: updated }
+    delete:
+      tags: [participants]
+      summary: Soft-delete participant
+      responses:
+        "200": { description: deleted }
+  /participants/import:
+    post:
+      tags: [participants]
+      summary: Bulk import (multipart CSV or XLSX; caps IMPORT_MAX_FILE_MB / IMPORT_MAX_ROWS)
+      responses:
+        "200": { description: per-row outcome report }
+        "413": { description: file/rows cap exceeded }
+
+  /teams:
+    get:
+      tags: [teams]
+      summary: List teams
+      responses:
+        "200": { description: teams }
+    post:
+      tags: [teams]
+      summary: Create team (admin)
+      responses:
+        "201": { description: created }
+  /teams/{id}:
+    patch:
+      tags: [teams]
+      summary: Update team
+      responses:
+        "200": { description: updated }
+    delete:
+      tags: [teams]
+      summary: Delete (soft; blocked if referenced)
+      responses:
+        "200": { description: deleted }
+        "409": { description: referenced }
+
+  /rooms:
+    get:
+      tags: [rooms]
+      summary: List rooms (visible rooms for the caller)
+      responses:
+        "200": { description: rooms }
+    post:
+      tags: [rooms]
+      summary: Create room with fresh join code (DRAFT) (admin)
+      responses:
+        "201": { description: created }
+  /rooms/{id}:
+    get:
+      tags: [rooms]
+      summary: Room detail (members see it; others get 404)
+      responses:
+        "200": { description: room + joinUrl }
+        "404": { description: not found / hidden }
+    patch:
+      tags: [rooms]
+      summary: Update name/description/accessMode/settings (admin)
+      responses:
+        "200": { description: updated }
+  /rooms/{id}/status:
+    post:
+      tags: [rooms]
+      summary: Lifecycle status (DRAFT→ACTIVE→CLOSED→ARCHIVED)
+      responses:
+        "200": { description: updated }
+  /rooms/{id}/duplicate:
+    post:
+      tags: [rooms]
+      summary: Copy categories, linked teams and members — never votes (audited)
+      responses:
+        "201": { description: copied room }
+  /rooms/join:
+    post:
+      tags: [rooms]
+      summary: Join by code. RESTRICTED rooms reject unassigned users (403); OPEN_WITH_CODE auto-enrolls with the user's org team.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string }
+      responses:
+        "200": { description: joined }
+        "403": { description: not assigned / code disabled }
+        "404": { description: unknown code }
+  /rooms/{id}/members:
+    get:
+      tags: [rooms]
+      summary: Room members
+      responses:
+        "200": { description: members }
+    put:
+      tags: [rooms]
+      summary: Replace member list (max 5000)
+      responses:
+        "200": { description: members }
+  /rooms/{id}/teams:
+    get:
+      tags: [rooms]
+      summary: Linked room teams with presentation order
+      responses:
+        "200": { description: roomTeams }
+    put:
+      tags: [rooms]
+      summary: Replace linked teams; removing a team with voting history is 409
+      responses:
+        "200": { description: roomTeams }
+  /rooms/{id}/config/new-version:
+    post:
+      tags: [categories]
+      summary: Only allowed after votes exist; deep-copies current categories into a new version
+      responses:
+        "200": { description: new versionId + categories }
+        "409": { description: not locked yet }
+
+  /rooms/{id}/categories:
+    get:
+      tags: [categories]
+      summary: Categories of the current config version
+      responses:
+        "200": { description: categories }
+    post:
+      tags: [categories]
+      summary: Add category (blocked with 409 once votes exist — config locked)
+      responses:
+        "201": { description: created }
+  /rooms/{id}/categories/reorder:
+    post:
+      tags: [categories]
+      summary: Reorder (blocked once locked)
+      responses:
+        "200": { description: categories }
+  /categories/{id}:
+    patch:
+      tags: [categories]
+      summary: Update category. Cosmetic edits (name/description) always allowed; structural (min/max/step/weight/isActive) blocked once votes exist. `active:false` archives voted categories, unused ones are removed. Also used to activate and deactivate categories.
+      responses:
+        "200": { description: updated }
+    delete:
+      tags: [categories]
+      summary: Remove category; used categories are refused (409)
+      responses:
+        "200": { description: removed }
+
+  /rooms/{id}/rounds:
+    get:
+      tags: [rounds]
+      summary: Rounds incl. per-round vote counts (moderators/admin only)
+      responses:
+        "200": { description: rounds }
+  /rooms/{id}/rounds/select:
+    post:
+      tags: [rounds]
+      summary: Select a presenting team → creates a PENDING round. Re-presenting a completed team requires force:true (audited).
+      responses:
+        "201": { description: round }
+  /rounds/{id}/open:
+    post:
+      tags: [rounds]
+      summary: Open voting
+      responses:
+        "200": { description: round OPEN }
+  /rounds/{id}/pause:
+    post:
+      tags: [rounds]
+      summary: Pause voting
+      responses:
+        "200": { description: round PAUSED }
+  /rounds/{id}/resume:
+    post:
+      tags: [rounds]
+      summary: Resume voting
+      responses:
+        "200": { description: round OPEN }
+  /rounds/{id}/close:
+    post:
+      tags: [rounds]
+      summary: Close round
+      responses:
+        "200": { description: round CLOSED }
+  /rounds/{id}/reopen:
+    post:
+      tags: [rounds]
+      summary: Re-open closed round (admin only, audited)
+      responses:
+        "200": { description: round OPEN }
+  /rounds/{id}/my-vote:
+    get:
+      tags: [votes]
+      summary: Caller's current vote in this round (scores + revision)
+      responses:
+        "200": { description: vote or null }
+  /rooms/{id}/rounds/{roundId}/progress:
+    get:
+      tags: [rounds]
+      summary: Voting progress (counts; voter identities only when adminCanSeeVoterIdentity)
+      responses:
+        "200": { description: progress }
+
+  /rounds/{id}/votes:
+    post:
+      tags: [votes]
+      summary: >
+        Submit or update the caller's vote. Rules: membership required,
+        own team forbidden (403), OPEN round only (409), all required categories
+        present, unknown/duplicate categories rejected (409), score within
+        min/max/step (409). Idempotent: existing (round, voter) vote is updated
+        with revision+1 when allowVoteEdit; 409 "final" otherwise.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scores]
+              properties:
+                scores:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    type: object
+                    required: [categoryId, score]
+                    properties:
+                      categoryId: { type: string }
+                      score: { type: number }
+      responses:
+        "201":
+          description: vote stored (edited=true on resubmission, includes revision)
+        "0": { description: — }
+        "400": { description: validation failed }
+        "403": { description: not a member / self vote }
+        "409": { description: rule violation (round state, range, missing category, final) }
+
+  /rooms/{id}/results:
+    get:
+      tags: [results]
+      summary: Admin/moderator analytics (per-category averages, per-vote raw scores, rankings, vote counts)
+      parameters:
+        - in: query
+          name: roundId
+          schema: { type: string }
+      responses:
+        "200": { description: results }
+  /rooms/{id}/my-results:
+    get:
+      tags: [results]
+      summary: Participant view (`visible:false` + hidden data until published)
+      responses:
+        "200": { description: own view }
+  /rooms/{id}/results/publish:
+    post:
+      tags: [results]
+      summary: Publish/unpublish results for participants (audited)
+      responses:
+        "200": { description: room }
+  /rooms/{id}/results/export:
+    get:
+      tags: [results]
+      summary: CSV/XLSX download (kind=summary|categories|raw, format=csv|xlsx). CSV cells that could start a formula are neutralized (leading apostrophe).
+      parameters:
+        - in: query
+          name: kind
+          schema: { type: string, enum: [summary, categories, raw] }
+        - in: query
+          name: format
+          schema: { type: string, enum: [csv, xlsx] }
+      responses:
+        "200": { description: file }
+
+  /audit:
+    get:
+      tags: [audit]
+      summary: Audit trail (admin) with actor/action/entity/ip filters
+      responses:
+        "200": { description: entries }
+
+  /socket.io:
+    get:
+      tags: [realtime]
+      summary: Socket.IO endpoint. Room-authenticated clients receive room:state_changed, team:presenting_changed, voting:opened/paused/resumed/closed, vote:submitted, results:published. Reconnect triggers a full snapshot resync; UIs also poll as a fallback.
+      x-transport: websocket + polling fallback
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: session
+    csrfHeader:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+security:
+  - sessionCookie: []
+    csrfHeader: []

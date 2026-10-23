@@ -1,0 +1,27 @@
+{
+  "name": "voting-system",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,green \"npm run dev -w server\" \"npm run dev -w web\"",
+    "dev:server": "npm run dev -w server",
+    "dev:web": "npm run dev -w web",
+    "db:up": "docker compose up -d postgres redis",
+    "db:migrate": "npm run migrate -w server",
+    "db:seed": "npm run seed -w server",
+    "build": "npm run build -w packages/shared && npm run build -w server && npm run build -w web",
+    "test": "npm run test -w server",
+    "test:e2e": "npm run e2e -w web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  },
+  "dependencies": {
+    "@socket.io/redis-adapter": "^8.3.0",
+    "multer": "^2.5.0"
+  }
+}

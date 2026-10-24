@@ -1,4 +1,3 @@
-import argon2 from "argon2";
 import { env } from "../config";
 import { sessionRepo } from "../repositories/session.repo";
 import { userRepo } from "../repositories/user.repo";
@@ -7,6 +6,7 @@ import { generateTemporaryPassword, randomToken, sha256 } from "../utils/codes";
 import { HttpError, unauthorized } from "../utils/errors";
 import { SESSION_COOKIE, sessionCookieOptions } from "../middleware/auth";
 import { checkAccountLockout, recordLoginFailure, recordLoginSuccess } from "../middleware/rateLimit";
+import { hashPassword, needsRehash, verifyPassword } from "../utils/password";
 import type { Response } from "express";
 
 const TTL_MS = () => env.SESSION_TTL_HOURS * 3600_000;
@@ -18,7 +18,7 @@ export const authService = {
     checkAccountLockout(identifier, ip);
     let user = await userRepo.findByIdentifier(identifier);
     if (user) {
-      const ok = await argon2.verify(user.passwordHash, password).catch(() => false);
+      const ok = await verifyPassword(user.passwordHash, password);
       if (!ok) user = null as never;
     }
     if (!user) {
@@ -30,6 +30,13 @@ export const authService = {
       throw unauthorized("Invalid credentials"); // generic: don't reveal deactivated state
     }
     recordLoginSuccess(identifier, ip);
+    if (needsRehash(user.passwordHash)) {
+      // upgrade legacy hash parameters in the background
+      const id = user.id;
+      hashPassword(password)
+        .then((passwordHash) => userRepo.update(id, { passwordHash }))
+        .catch((e) => console.error("password rehash failed", e));
+    }
 
     const token = randomToken();
     const expiresAt = new Date(Date.now() + TTL_MS());
@@ -63,9 +70,9 @@ export const authService = {
   async changePassword(userId: string, currentPassword: string, newPassword: string, token?: string) {
     const user = await userRepo.findById(userId);
     if (!user) throw unauthorized();
-    const ok = await argon2.verify(user.passwordHash, currentPassword).catch(() => false);
+    const ok = await verifyPassword(user.passwordHash, currentPassword);
     if (!ok) throw new HttpError(400, "Current password is incorrect");
-    const passwordHash = await argon2.hash(newPassword, { type: argon2.argon2id });
+    const passwordHash = await hashPassword(newPassword);
     await userRepo.update(user.id, { passwordHash, mustChangePassword: false });
     // invalidate other sessions; keep the current one
     if (token) await sessionRepo.deleteAllForUser(userId, sha256(token));
@@ -73,8 +80,6 @@ export const authService = {
   },
 
   /** Hash for temporary credentials (import/reset). */
-  hashPassword(password: string) {
-    return argon2.hash(password, { type: argon2.argon2id });
-  },
+  hashPassword,
   generateTemporaryPassword,
 };

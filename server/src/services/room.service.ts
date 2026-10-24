@@ -67,9 +67,14 @@ export const roomService = {
     if (!room) throw notFound("Room not found");
     if (room.status === "ARCHIVED") throw conflict("Archived rooms cannot be edited");
     const name = patch.name ? sanitizeText(patch.name as string) : undefined;
+    // settings PATCH is partial: merge onto the stored settings instead of replacing them
+    const settings = patch.settings
+      ? roomSettingsSchema.parse({ ...getSettings(room), ...(patch.settings as object) })
+      : undefined;
     const updated = await roomRepo.update(id, {
       ...patch,
       ...(name ? { name } : {}),
+      ...(settings ? { settings } : {}),
     });
     audit({
       actorId,

@@ -74,7 +74,16 @@ the compiled API.
 - Structural category changes are **locked once votes exist** in a room; admin
   then starts a new config version which deep-copies the categories.
 - Voting only happens on **OPEN** rounds (select → open → pause/resume → close);
-  admins can re-open closed rounds (audited).
+  admins can re-open closed rounds (audited). A room has **at most one live
+  round** (enforced by a partial unique index), and closing a round waits for
+  in-flight votes, so no vote is ever accepted after the close.
+
+### Live-event capacity
+
+Votes on the same round run in parallel (shared row lock); the close/pause
+transition takes the exclusive lock. Transient DB errors return `503` +
+`Retry-After` and the client retries automatically (submissions are
+idempotent). Tune `DB_POOL_SIZE` for very large rooms; see `.env.example`.
 
 ### Result arithmetic
 
@@ -104,7 +113,7 @@ rounds, votes, progress, results & exports, audit, realtime events).
 ## Testing
 
 ```bash
-npm test            # server: 25 integration tests (real Express + Postgres; needs docker db up)
+npm test            # server: integration tests incl. 150-voter burst + race tests (real Express + Postgres; needs docker db up)
 npm run test:e2e    # Playwright E2E: full admin → participant voting journey
 ```
 
@@ -114,13 +123,24 @@ concurrency, config locking, result arithmetic and CSV injection escaping.
 
 ## Security notes
 
-- Passwords: Argon2id; sessions: httpOnly SameSite cookies with hashed tokens in
-  the `sessions` table; login lockout after 5 failures (15 min).
+- Passwords: Argon2id (19 MiB, t=2 — OWASP baseline; older hashes upgrade on
+  login); sessions: httpOnly SameSite cookies with hashed tokens in the
+  `sessions` table, sliding expiry while in use; login lockout after 10
+  failures per account (5 min, cleared by an admin password reset).
+- Temporary passwords: the API itself refuses everything except the auth
+  endpoints until the user sets their own password.
+- Rate limits are **per signed-in account**, not per IP, so a whole venue on
+  one Wi-Fi router (one public IP) is never throttled together; only anonymous
+  traffic is limited per IP, with venue-sized ceilings. Set `TRUST_PROXY` to
+  match your proxy chain (default: loopback only) so `X-Forwarded-For` can't be
+  spoofed; an account-wide cap (50 failures from any IP) backs up the lockout.
 - Every mutating request requires the `X-CSRF-Token` header matching the
   `csrf` cookie (double-submit).
 - RBAC: permissions are data-driven (`packages/shared/src/permissions.ts`);
   moderators only act inside rooms they are assigned to — other rooms 404, so
-  existence is hidden (no IDOR probing).
+  existence is hidden (no IDOR probing). Participants only see their own
+  rooms; join codes are shown to admins and the room's moderators only;
+  unpublished results are admin/moderator only.
 - Exports escape CSV formula injection (`=`, `+`, `-`, `@` cell prefixes are
   neutralized).
 - Uploads/imports are capped (`IMPORT_MAX_FILE_MB`, `IMPORT_MAX_ROWS`).

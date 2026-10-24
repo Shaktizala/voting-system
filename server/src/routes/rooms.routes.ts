@@ -13,6 +13,7 @@ import { wrap, parseBody } from "./helpers";
 import { notFound } from "../utils/errors";
 import { memberGuard, moderatorGuard, isRoomModerator } from "./guards";
 import { prisma } from "../db";
+import { snapshotCache } from "../utils/snapshotCache";
 
 const r = Router();
 
@@ -161,7 +162,7 @@ r.get("/:id/my-membership", wrap(async (req, res) => {
 
 r.get("/:id/full", wrap(async (req, res) => {
   await memberGuard(req, req.params.id);
-  const snap = await roomRepo.fullSnapshot(req.params.id);
+  const snap = await snapshotCache.get(req.params.id); // shared 1s per-room cache, invalidated on every room event
   if (!snap) throw notFound("Room not found");
   const settings = getSettings(snap);
   const membership = await roomRepo.findMember(req.params.id, req.user!.id);

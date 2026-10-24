@@ -81,10 +81,9 @@ r.post("/rounds/:id/reopen", wrap(async (req, res) => {
 /* --------------------------------- votes --------------------------------- */
 
 r.post("/rounds/:id/votes", writeLimiter, wrap(async (req, res) => {
-  const round = await fetchRound(req.params.id);
-  await memberGuard(req, round.roomId);
   const { scores } = parseBody(voteSubmitSchema, req.body);
-  const result = await voteService.submit(round.roomId, round.id, req.user!.id, scores, req.ip);
+  // membership/visibility checks happen inside the vote transaction (hot path: no extra round-trips)
+  const result = await voteService.submit(req.params.id, req.user!, scores, req.ip);
   res.status(201).json(result);
 }));
 

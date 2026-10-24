@@ -5,7 +5,7 @@ import { SESSION_COOKIE } from "../middleware/auth";
 import { sha256 } from "../utils/codes";
 import { sessionRepo } from "../repositories/session.repo";
 import { roomRepo } from "../repositories/room.repo";
-import { ROOM_CHANNEL } from "@voting/shared";
+import { MOD_CHANNEL, ROOM_CHANNEL } from "@voting/shared";
 import { setIo } from "./emit";
 
 export function createRealtime(httpServer: any): Server {
@@ -64,13 +64,13 @@ export function createRealtime(httpServer: any): Server {
       if (!membership && user.role !== "ADMIN") return ack?.({ ok: false, error: "forbidden" });
 
       socket.join(ROOM_CHANNEL(roomId));
-      if (isMod) socket.join(`mod:${roomId}`);
+      if (isMod) socket.join(MOD_CHANNEL(roomId));
       ack?.({ ok: true, roomStatus: room.status });
     });
 
     socket.on("room:leave", async ({ roomId }: { roomId: string }) => {
       socket.leave(ROOM_CHANNEL(roomId));
-      socket.leave(`mod:${roomId}`);
+      socket.leave(MOD_CHANNEL(roomId));
     });
 
     socket.on("disconnecting", () => {

@@ -3,9 +3,8 @@ import crypto from "crypto";
 import { env } from "../config";
 import { sessionRepo } from "../repositories/session.repo";
 import { roleHas, type Permission, type Role } from "@voting/shared";
-import { forbidden, unauthorized } from "../utils/errors";
+import { HttpError, forbidden, unauthorized } from "../utils/errors";
 import { sha256 as sha } from "../utils/codes";
-import { prisma } from "../db";
 
 export const SESSION_COOKIE = "session";
 export const CSRF_COOKIE = "csrf";
@@ -20,12 +19,24 @@ export function sessionCookieOptions(maxAgeMs: number) {  return {
 }
 
 /** Resolves the session cookie to req.user (or 401 for API-bound guards). */
-export async function attachUser(req: Request, _res: Response, next: NextFunction) {
+export async function attachUser(req: Request, res: Response, next: NextFunction) {
   const token = req.cookies?.[SESSION_COOKIE] as string | undefined;
   if (!token) return next();
-  const session = await sessionRepo.findValid(sha(token));
+  let session;
+  try {
+    session = await sessionRepo.findValid(sha(token));
+  } catch (e) {
+    return next(e);
+  }
   if (!session || session.expiresAt < new Date()) return next();
   if (session.user.status !== "ACTIVE" || session.user.deletedAt) return next();
+  // sliding expiry: an active user is never logged out mid-event (renewed at most
+  // once per half-TTL, so this is one extra write every few hours, not per request)
+  const ttlMs = env.SESSION_TTL_HOURS * 3600_000;
+  if (session.expiresAt.getTime() - Date.now() < ttlMs / 2) {
+    await sessionRepo.extend(session.id, new Date(Date.now() + ttlMs)).catch(() => {});
+    res.cookie(SESSION_COOKIE, token, sessionCookieOptions(ttlMs));
+  }
   req.user = {
     id: session.user.id,
     name: session.user.name,
@@ -42,6 +53,15 @@ export async function attachUser(req: Request, _res: Response, next: NextFunctio
 export function requireAuth(req: Request, _res: Response, next: NextFunction) {
   if (!req.user) return next(unauthorized());
   next();
+}
+
+/** Auth endpoints reachable while a temporary password is still in place. */
+const PASSWORD_CHANGE_ALLOWED = new Set(["/auth/me", "/auth/csrf", "/auth/change-password", "/auth/logout", "/health"]);
+
+/** Server-side enforcement of mustChangePassword (the UI redirect alone is bypassable). */
+export function requirePasswordChanged(req: Request, _res: Response, next: NextFunction) {
+  if (!req.user?.mustChangePassword || PASSWORD_CHANGE_ALLOWED.has(req.path)) return next();
+  next(new HttpError(403, "Change your temporary password to continue", "PASSWORD_CHANGE_REQUIRED"));
 }
 
 export function requirePermission(permission: Permission) {

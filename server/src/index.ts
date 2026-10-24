@@ -1,3 +1,4 @@
+import "./threadpool"; // first: sizes the libuv pool before argon2 uses it
 import http from "http";
 import { createApp } from "./app";
 import { createRealtime } from "./realtime";

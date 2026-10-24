@@ -1,14 +1,22 @@
 /** Fetch wrapper: JSON, CSRF double-submit header, cookie credentials. */
 let csrfToken: string | null = null;
 
+const readCsrfCookie = () =>
+  document.cookie
+    .split("; ")
+    .find((c) => c.startsWith("csrf="))
+    ?.split("=")[1] ?? null;
+
 async function ensureCsrf(): Promise<string> {
+  // the cookie survives reloads; only bootstrap it over the network when missing
+  csrfToken ??= readCsrfCookie();
   if (csrfToken) return csrfToken;
-  await fetch("/api/auth/csrf", { credentials: "include" });
-  csrfToken =
-    document.cookie
-      .split("; ")
-      .find((c) => c.startsWith("csrf="))
-      ?.split("=")[1] ?? null;
+  try {
+    await fetch("/api/auth/csrf", { credentials: "include" });
+  } catch {
+    throw new ApiError(0, "Can't reach the server. Check your connection");
+  }
+  csrfToken = readCsrfCookie();
   return csrfToken ?? "";
 }
 
@@ -31,12 +39,18 @@ export async function api<T = unknown>(
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
   if (method !== "GET") headers["X-CSRF-Token"] = await ensureCsrf();
 
-  const res = await fetch(`/api${path}`, {
-    method,
-    headers,
-    credentials: "include",
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`/api${path}`, {
+      method,
+      headers,
+      credentials: "include",
+      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    });
+  } catch {
+    // offline / Wi-Fi drop / server restarting
+    throw new ApiError(0, "Can't reach the server. Check your connection");
+  }
 
   if (res.status === 204) return undefined as T;
   const contentType = res.headers.get("content-type") ?? "";
@@ -48,8 +62,25 @@ export async function api<T = unknown>(
   return data as T;
 }
 
-export async function download(path: string): Promise<{ blob: Blob; filename: string }> {
-  const res = await fetch(`/api${path}`, { credentials: "include" });
+/**
+ * Worth retrying automatically: network failures, rate limiting and server
+ * overload. Validation/permission errors (4xx) are final.
+ */
+export function isRetryable(e: unknown): boolean {
+  return e instanceof ApiError && (e.status === 0 || e.status === 429 || e.status >= 500);
+}
+
+/** Exponential backoff with jitter so a whole room doesn't retry in lockstep. */
+export const retryDelay = (attempt: number) => Math.min(1000 * 2 ** attempt, 8000) + Math.random() * 600;
+
+export async function download(path: string, body?: unknown): Promise<{ blob: Blob; filename: string }> {
+  const res = await fetch(`/api${path}`, {
+    credentials: "include",
+    ...(body !== undefined
+      ? { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": await ensureCsrf() }, body: JSON.stringify(body) }
+      : {}),
+  });
+  if (!res.ok) throw new ApiError(res.status, `Download failed (HTTP ${res.status})`);
   const dispo = res.headers.get("content-disposition") ?? "";
   const match = /filename="?([^";]+)"?/.exec(dispo);
   return { blob: await res.blob(), filename: match?.[1] ?? "download" };

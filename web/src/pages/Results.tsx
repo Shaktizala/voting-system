@@ -48,17 +48,27 @@ export default function Results({ self = false }: { self?: boolean }) {
   const qc = useQueryClient();
   const [roundFilter, setRoundFilter] = useState("");
 
-  const isParticipant = user!.role === "PARTICIPANT" || self;
+  // full results are admin + room-moderator only; a global MODERATOR who is a plain
+  // participant in this room gets the publish-gated view like everyone else
+  const membershipQ = useQuery({
+    queryKey: ["my-membership", roomId],
+    queryFn: () => api<{ membership: { role: string } | null }>(`/rooms/${roomId}/my-membership`),
+    enabled: user!.role === "MODERATOR" && !self && !!roomId,
+  });
+  const accessKnown = user!.role !== "MODERATOR" || self || !membershipQ.isPending;
+  const isParticipant =
+    self || user!.role === "PARTICIPANT" || (user!.role === "MODERATOR" && membershipQ.data?.membership?.role !== "MODERATOR");
   const path = isParticipant ? `/rooms/${roomId}/my-results` : `/rooms/${roomId}/results`;
   const resultsQ = useQuery<any>({
     queryKey: [path, roundFilter],
     queryFn: () => api(path.replace("/results", `/results${""}`) + (isParticipant ? "" : `${roundFilter ? `?roundId=${roundFilter}` : ""}`)),
+    enabled: accessKnown,
   });
 
   const roundsQ = useQuery({
     queryKey: ["rounds", roomId],
     queryFn: () => api<{ rounds: any[] }>(`/rooms/${roomId}/rounds`),
-    enabled: !isParticipant,
+    enabled: accessKnown && !isParticipant,
   });
 
   const publish = useMutation({
@@ -84,7 +94,7 @@ export default function Results({ self = false }: { self?: boolean }) {
     }
   };
 
-  if (resultsQ.isLoading) return <Skeleton className="h-96 rounded-2xl" />;
+  if (resultsQ.isPending) return <Skeleton className="h-96 rounded-2xl" />;
   const data = resultsQ.data;
   if (isParticipant && !data?.visible) {
     return <EmptyState title="Results not published yet" hint="The moderator will publish results when voting completes." icon={<IconChart size={22} />} />;
@@ -184,7 +194,7 @@ export default function Results({ self = false }: { self?: boolean }) {
         <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatCard label="Votes stored" value={data.participation?.submittedVotes ?? "—"} icon={<IconVote size={18} />} tone="brand" />
           <StatCard label="Rounds" value={data.participation?.totalRounds ?? "—"} icon={<IconChart size={18} />} tone="ocean" />
-          <StatCard label="Eligible voters" value={data.participation?.eligibleVoters ?? "—"} icon={<IconUsers size={18} />} tone="jade" />
+          <StatCard label="Voting members" value={data.participation?.eligibleVoters ?? "—"} icon={<IconUsers size={18} />} tone="jade" />
           <StatCard label="Closed rounds" value={data.participation?.closedRounds ?? "—"} icon={<IconTrophy size={18} />} tone="gold" />
         </div>
       )}

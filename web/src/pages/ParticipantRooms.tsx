@@ -38,7 +38,7 @@ export default function ParticipantRooms() {
         .filter((room) => room.status !== "ARCHIVED")
         .map((room) => ({ room, membership: room.membership ?? { role: null, teamId: null } }));
     },
-    refetchInterval: 15000,
+    refetchInterval: 30_000,
   });
 
   const join = async () => {

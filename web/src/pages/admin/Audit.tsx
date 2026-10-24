@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "../../lib/api";
+import { api, ApiError } from "../../lib/api";
 import {
   Button,
   DataTable,
@@ -68,6 +68,14 @@ export default function Audit() {
 
       {logsQ.isLoading ? (
         <Skeleton className="h-96 rounded-2xl" />
+      ) : logsQ.isError ? (
+        // never present a failed load as "nothing happened" — an empty audit trail is a claim
+        <EmptyState
+          title="Couldn't load the audit log"
+          hint={logsQ.error instanceof ApiError ? `${logsQ.error.message}. The trail itself is unaffected.` : "The request failed. The trail itself is unaffected."}
+          icon={<IconAudit size={22} />}
+          action={<Button variant="secondary" onClick={() => logsQ.refetch()}>Try again</Button>}
+        />
       ) : logs.length === 0 ? (
         <EmptyState title="Nothing logged yet" hint="Actions will appear here as the team works." icon={<IconAudit size={22} />} />
       ) : filtered.length === 0 ? (

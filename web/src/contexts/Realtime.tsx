@@ -19,20 +19,25 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
   const [connected, setConnected] = useState(false);
   const joined = useRef<string | null>(null);
 
-  const reconnectedCount = useRef(0);
-
   useEffect(() => {
     socketRef.current = io("/", { withCredentials: true, transports: ["polling", "websocket"] });
     const socket = socketRef.current;
+    let everConnected = false;
+    let resync: ReturnType<typeof setTimeout> | undefined;
     socket.on("connect", () => {
       setConnected(true);
-      // full resync after (re)connection
       if (joined.current) socket.emit("room:join", { roomId: joined.current });
-      qc.invalidateQueries();
-      reconnectedCount.current = 0;
+      // after a REconnect, events may have been missed: resync active views.
+      // Jittered so a server restart doesn't make every client refetch at once.
+      if (everConnected) {
+        clearTimeout(resync);
+        resync = setTimeout(() => qc.invalidateQueries({ type: "active" }), Math.random() * 3000);
+      }
+      everConnected = true;
     });
     socket.on("disconnect", () => setConnected(false));
     return () => {
+      clearTimeout(resync);
       socket.close();
       socketRef.current = null;
     };

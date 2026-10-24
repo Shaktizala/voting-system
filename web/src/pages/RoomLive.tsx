@@ -1,7 +1,7 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, ApiError } from "../lib/api";
+import { api, ApiError, isRetryable, retryDelay } from "../lib/api";
 import { useAuth } from "../contexts/Auth";
 import { useRealtime } from "../contexts/Realtime";
 import { useToast } from "../contexts/Toast";
@@ -46,6 +46,9 @@ function initials(name: string) {
     .join("");
 }
 
+/** Events that change the room snapshot (vote:submitted only changes progress). */
+const STATE_EVENTS = ["room:state_changed", "team:presenting_changed", "voting:opened", "voting:paused", "voting:resumed", "voting:closed", "results:published"] as const;
+
 export default function RoomLive() {
   const { roomId } = useParams<{ roomId: string }>();
   const { user } = useAuth();
@@ -55,25 +58,57 @@ export default function RoomLive() {
   const snapshotQ = useQuery({
     queryKey: ["snapshot", roomId],
     queryFn: () => api<Snapshot>(`/rooms/${roomId}/full`),
-    refetchInterval: 8000, // polling fallback when the realtime socket drops
+    // socket events drive updates; polling is only a safety net (fast when the socket is down)
+    refetchInterval: () => (connected ? 30_000 : 5_000) + Math.random() * 2_000,
     refetchIntervalInBackground: true, // projector/participant tabs are often unfocused
+    retry: 3,
+    retryDelay,
   });
+  const ready = snapshotQ.data !== undefined;
 
-  // socket wiring: join room channel and re-sync on every relevant event
+  // socket wiring: join the room channel once data is loaded, re-sync on events
   useEffect(() => {
-    if (!roomId || !snapshotQ.data) return;
+    if (!roomId || !ready) return;
     join(roomId);
     const socket = socketRef.current;
     if (!socket) return;
-    const events = ["room:state_changed", "team:presenting_changed", "voting:opened", "voting:paused", "voting:resumed", "voting:closed", "vote:submitted", "results:published"];
-    events.forEach((ev) => socket.on(ev, () => qc.invalidateQueries({ queryKey: ["snapshot", roomId] })));
-    return () => events.forEach((ev) => socket.off(ev));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomId, snapshotQ.data, join, socketRef, qc]);
+    let snapshotTimer: ReturnType<typeof setTimeout> | undefined;
+    let progressTimer: ReturnType<typeof setTimeout> | undefined;
+    // coalesce bursts (one action can emit two events) and spread the refetch so
+    // a full room of clients doesn't hit the API in the same millisecond
+    const refreshSnapshot = () => {
+      if (snapshotTimer) return;
+      snapshotTimer = setTimeout(() => {
+        snapshotTimer = undefined;
+        qc.invalidateQueries({ queryKey: ["snapshot", roomId] });
+      }, 50 + Math.random() * 400);
+    };
+    // moderators: show the new count instantly, refresh the voter list at most once a second
+    const onVote = (p: { roundId: string; votedCount: number; eligibleCount: number }) => {
+      qc.setQueryData(["progress", roomId, p.roundId], (old: any) =>
+        old ? { ...old, votedCount: p.votedCount, eligibleCount: p.eligibleCount, percentage: p.eligibleCount ? Math.round((p.votedCount / p.eligibleCount) * 100) : 0 } : old
+      );
+      if (progressTimer) return;
+      progressTimer = setTimeout(() => {
+        progressTimer = undefined;
+        qc.invalidateQueries({ queryKey: ["progress", roomId] });
+      }, 1000);
+    };
+    STATE_EVENTS.forEach((ev) => socket.on(ev, refreshSnapshot));
+    socket.on("vote:submitted", onVote);
+    return () => {
+      // remove only our handlers — other components may listen to the same events
+      STATE_EVENTS.forEach((ev) => socket.off(ev, refreshSnapshot));
+      socket.off("vote:submitted", onVote);
+      clearTimeout(snapshotTimer);
+      clearTimeout(progressTimer);
+    };
+  }, [roomId, ready, join, socketRef, qc]);
 
   if (snapshotQ.isLoading || !snapshotQ.data) return <Skeleton className="h-96 rounded-2xl" />;
   const snap = snapshotQ.data;
-  const isModerator = user!.role === "ADMIN" || snap.membership?.role === "MODERATOR";
+  // mirrors the server's moderatorGuard: global MODERATOR role *and* room moderator
+  const isModerator = user!.role === "ADMIN" || (user!.role === "MODERATOR" && snap.membership?.role === "MODERATOR");
   // live/pending round wins; otherwise the most recent round so voters see closures
   const activeRound = snap.rounds.find((r) => ["PENDING", "OPEN", "PAUSED"].includes(r.status));
   const lastRound = snap.rounds.length
@@ -157,7 +192,7 @@ export default function RoomLive() {
           </div>
           <div className="flex flex-col items-start gap-2 sm:items-end">
             <StatusBadge status={roundStatus} />
-            {presentingTeam && (
+            {presentingTeam && presentingTeam.presentationOrder > 0 && (
               <span className="text-[11px] text-white/35">
                 Presentation #{presentingTeam.presentationOrder}
               </span>
@@ -185,7 +220,7 @@ export default function RoomLive() {
             <span className="text-xs text-ink-500">{presentingTeam?.name ?? "No team presenting"}</span>
           </div>
           {currentRound ? (
-            <Progress roomId={roomId!} roundId={currentRound.id} />
+            <Progress roomId={roomId!} roundId={currentRound.id} connected={connected} />
           ) : (
             <Card>
               <p className="text-sm text-ink-500">Progress appears once a team starts presenting.</p>
@@ -342,37 +377,62 @@ function CheckForce({ label, checked, onChecked }: { label: string; checked: boo
 function VotingPanel({ roomId, snap, round, myTeamId, isModerator }: { roomId: string; snap: Snapshot; round: Snapshot["rounds"][number] | undefined; myTeamId: string | null; isModerator: boolean }) {
   const qc = useQueryClient();
   const toast = useToast();
-  const [scores, setScores] = useState<Record<string, number>>({});
+  const draftKey = round ? `vote-draft:${round.id}` : null;
+  // a half-filled ballot survives refreshes, flaky Wi-Fi and re-login
+  const [scores, setScores] = useState<Record<string, number>>(() => readDraft(draftKey));
   const [review, setReview] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const myVoteQ = useQuery({
     queryKey: ["myVote", roomId, round?.id],
-    queryFn: () => api<{ vote: any }>(`/rounds/${round!.id}/my-vote`),
+    queryFn: () => api<{ vote: MyVote | null }>(`/rounds/${round!.id}/my-vote`),
     enabled: !!round,
   });
+  const savedVote = myVoteQ.data?.vote?.vote ?? null;
 
   useEffect(() => {
-    if (myVoteQ.data?.vote?.scores) {
-      const next: Record<string, number> = {};
-      for (const score of myVoteQ.data.vote.scores) next[score.categoryId] = Number(score.score);
-      setScores(next);
-    }
-  }, [myVoteQ.data]);
+    setScores(readDraft(draftKey));
+  }, [draftKey]);
+
+  useEffect(() => {
+    if (!savedVote) return;
+    const next: Record<string, number> = {};
+    for (const score of savedVote.scores) next[score.categoryId] = Number(score.score);
+    setScores(next);
+  }, [savedVote]);
+
+  const updateScores = (next: Record<string, number>) => {
+    setScores(next);
+    writeDraft(draftKey, next);
+  };
 
   const submit = useMutation({
     mutationFn: (finalScores: Record<string, number>) =>
-      api(`/rounds/${round!.id}/votes`, {
+      api<{ edited: boolean }>(`/rounds/${round!.id}/votes`, {
         body: { scores: snap.categories.map((category) => ({ categoryId: category.id, score: finalScores[category.id] })) },
       }),
-    onSuccess: (res: any) => {
+    // submissions are idempotent server-side, so transient failures retry on their own
+    retry: (count, e) => count < 4 && isRetryable(e),
+    retryDelay,
+    onSuccess: (res) => {
       setReview(false);
       setError(null);
+      writeDraft(draftKey, null);
       qc.invalidateQueries({ queryKey: ["myVote", roomId, round?.id] });
       toast(res.edited ? "Vote updated" : `Vote submitted — thank you!`, "success");
     },
-    onError: (e) => setError(e instanceof ApiError ? e.message : "Submission failed"),
+    onError: (e) =>
+      setError(
+        e instanceof ApiError
+          ? isRetryable(e)
+            ? `${e.message}. Your scores are kept: select Confirm & submit to send them again.`
+            : e.message
+          : "Submission failed"
+      ),
   });
+  // offline: TanStack pauses the mutation and sends it on reconnect; failures retry with backoff
+  const queuedOffline = submit.isPending && submit.isPaused;
+  const retrying = submit.isPending && !submit.isPaused && submit.failureCount > 0;
 
   if (!round || round.status === "PENDING") {
     return (
@@ -384,8 +444,10 @@ function VotingPanel({ roomId, snap, round, myTeamId, isModerator }: { roomId: s
           <div>
             <h2 className="font-display text-base font-semibold text-ink-900">Waiting for the moderator</h2>
             <p className="mt-1 text-sm leading-relaxed text-ink-500">
-              A team has been selected. Voting will open when the moderator starts the round — this
-              screen updates automatically.
+              {round
+                ? "A team has been selected. Voting opens when the moderator starts the round."
+                : "No team is presenting yet. Voting opens once the moderator picks the first team."}
+              {" "}This screen updates on its own.
             </p>
           </div>
         </div>
@@ -455,7 +517,7 @@ function VotingPanel({ roomId, snap, round, myTeamId, isModerator }: { roomId: s
   }
 
   const allAnswered = snap.categories.every((category) => !category.isRequired || scores[category.id] !== undefined);
-  const submitted = myVoteQ.data?.vote != null;
+  const submitted = savedVote != null;
   const teamName = snap.teams.find((team) => team.teamId === round.teamId)?.name;
 
   return (
@@ -475,7 +537,7 @@ function VotingPanel({ roomId, snap, round, myTeamId, isModerator }: { roomId: s
         {submitted && (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-jade-50 px-2.5 py-1 text-[10px] font-semibold text-jade-700 ring-1 ring-inset ring-jade-200">
             <IconCheck size={11} strokeWidth={3} />
-            Vote saved{myVoteQ.data?.vote ? ` · revision ${myVoteQ.data.vote.revision}` : ""}
+            Vote saved{savedVote && savedVote.revision > 1 ? ` · edited ${savedVote.revision - 1}×` : ""}
           </span>
         )}
       </div>
@@ -508,8 +570,15 @@ function VotingPanel({ roomId, snap, round, myTeamId, isModerator }: { roomId: s
               onClick={() => submit.mutate(scores)}
               disabled={submit.isPending}
             >
-              {submit.isPending ? "Submitting…" : "Confirm & submit"}
+              {queuedOffline ? "Waiting for connection…" : retrying ? "Reconnecting…" : submit.isPending ? "Submitting…" : "Confirm & submit"}
             </Button>
+            {(queuedOffline || retrying) && (
+              <span role="status" className="self-center text-[11px] text-gold-800">
+                {queuedOffline
+                  ? "You're offline. Your vote is queued and sends as soon as you reconnect. Keep this screen open."
+                  : `Connection lost. Retrying automatically, attempt ${submit.failureCount} of 4. Keep this screen open.`}
+              </span>
+            )}
           </div>
         </div>
       ) : (
@@ -535,7 +604,7 @@ function VotingPanel({ roomId, snap, round, myTeamId, isModerator }: { roomId: s
                     max={category.maxScore}
                     step={category.step}
                     value={scores[category.id]}
-                    onChange={(value) => setScores({ ...scores, [category.id]: value })}
+                    onChange={(value) => updateScores({ ...scores, [category.id]: value })}
                     label={category.name}
                   />
                 </div>
@@ -554,6 +623,30 @@ function VotingPanel({ roomId, snap, round, myTeamId, isModerator }: { roomId: s
       )}
     </Card>
   );
+}
+
+interface MyVote {
+  vote: { revision: number; scores: { categoryId: string; score: string | number }[] };
+  submittedAt: string;
+}
+
+function readDraft(key: string | null): Record<string, number> {
+  if (!key) return {};
+  try {
+    return JSON.parse(sessionStorage.getItem(key) ?? "{}");
+  } catch {
+    return {};
+  }
+}
+
+function writeDraft(key: string | null, scores: Record<string, number> | null) {
+  if (!key) return;
+  try {
+    if (scores) sessionStorage.setItem(key, JSON.stringify(scores));
+    else sessionStorage.removeItem(key);
+  } catch {
+    // storage unavailable (private mode / quota): the in-memory ballot still works
+  }
 }
 
 /** Thumb-friendly score input: slider + honouring exact steps. */
@@ -608,11 +701,11 @@ function SliderInput({ min, max, step, value, onChange, label }: { min: number; 
 
 /* ============================== progress panel ============================= */
 
-function Progress({ roomId, roundId }: { roomId: string; roundId: string }) {
+function Progress({ roomId, roundId, connected }: { roomId: string; roundId: string; connected: boolean }) {
   const progressQ = useQuery({
     queryKey: ["progress", roomId, roundId],
     queryFn: () => api<any>(`/rooms/${roomId}/rounds/${roundId}/progress`),
-    refetchInterval: 10000, // event-driven updates + poll fallback
+    refetchInterval: connected ? 30_000 : 5_000, // vote:submitted drives updates; poll is the fallback
     refetchIntervalInBackground: true,
   });
   if (progressQ.isLoading) return <Skeleton className="h-32 rounded-2xl" />;

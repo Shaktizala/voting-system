@@ -1,0 +1,30 @@
+# dependencies (npm workspaces: root + each package)
+node_modules/
+
+# build output
+dist/
+*.tsbuildinfo
+
+# environment — copy .env.example instead; never commit real secrets
+.env
+.env.*
+!.env.example
+
+# test & tooling output
+coverage/
+web/test-results/
+web/playwright-report/
+web/blob-report/
+.playwright-mcp/
+.vite/
+
+# logs
+*.log
+npm-debug.log*
+
+# editors / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json

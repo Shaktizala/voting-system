@@ -215,9 +215,8 @@ describe("access control", () => {
     expect(list.map((x) => x.id)).not.toContain(other.room.id);
     expect(list.every((x) => x.joinCode === undefined)).toBe(true);
     expect((await call(r.voterJars[0], "GET", `/rooms/${r.room.id}`)).body.room.joinCode).toBeUndefined();
-    // the room's moderator still gets the code to share it
-    const modList = (await call(r.modJar, "GET", "/rooms")).body.rooms as any[];
-    expect(modList.find((x) => x.id === r.room.id).joinCode).toBe(r.room.joinCode);
+    // the room's moderator gets the code (to share it) from the room itself, not the list
+    expect((await call(r.modJar, "GET", `/rooms/${r.room.id}`)).body.room.joinCode).toBe(r.room.joinCode);
   });
 
   it("temporary-password accounts can only reach auth endpoints", async () => {

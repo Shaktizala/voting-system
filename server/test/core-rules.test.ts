@@ -559,3 +559,95 @@ describe("lifecycle and exports", () => {
     expect(text).toContain("'=SUM"); // neutralized
   });
 });
+
+/* =========================== 7. access-control hardening ================== */
+
+describe("access-control hardening", () => {
+  it("never returns password hashes from user/membership endpoints", async () => {
+    const admin = await makeUser("ADMIN");
+    const member = await makeUser("PARTICIPANT");
+    const { room } = await setupRoom(admin.id, { categories: [{ name: "C" }] });
+    await addMembership(room.id, member.id, null);
+
+    const { j } = await login(admin.username);
+    const list = await call(j, "GET", "/participants");
+    expect(list.status).toBe(200);
+    const participants = (list.body as any).participants as any[];
+    expect(participants.length).toBeGreaterThan(0);
+    for (const p of participants) {
+      expect("passwordHash" in p).toBe(false);
+    }
+
+    // the room membership endpoint must not leak it either
+    const { j: mj } = await login(member.username);
+    const mem = await call(mj, "GET", `/rooms/${room.id}/my-membership`);
+    expect(mem.status).toBe(200);
+    expect("passwordHash" in ((mem.body as any).membership?.user ?? {})).toBe(false);
+  });
+
+  it("scopes GET /rooms to the caller's memberships and hides join codes", async () => {
+    const admin = await makeUser("ADMIN");
+    const participant = await makeUser("PARTICIPANT");
+    const joined = await setupRoom(admin.id, { categories: [{ name: "C" }] });
+    const other = await setupRoom(admin.id, { categories: [{ name: "C" }] });
+    await addMembership(joined.room.id, participant.id, null);
+
+    const { j } = await login(participant.username);
+    const res = await call(j, "GET", "/rooms");
+    expect(res.status).toBe(200);
+    const rooms = (res.body as any).rooms as any[];
+    const ids = rooms.map((r) => r.id);
+    expect(ids).toContain(joined.room.id);
+    expect(ids).not.toContain(other.room.id);
+    for (const r of rooms) {
+      expect("joinCode" in r).toBe(false);
+    }
+
+    // /rooms/mine returns the same scoped view with membership attached
+    const mine = await call(j, "GET", "/rooms/mine");
+    expect(mine.status).toBe(200);
+    const mineRooms = (mine.body as any).rooms as any[];
+    const mineJoined = mineRooms.find((r) => r.id === joined.room.id);
+    expect(mineJoined).toBeTruthy();
+    expect(mineJoined.membership?.role).toBe("PARTICIPANT");
+
+    // admins still see everything (with join codes) for the admin console
+    const { j: aj } = await login(admin.username);
+    const adminRooms = (await call(aj, "GET", "/rooms")).body as any;
+    expect(adminRooms.rooms.some((r: any) => r.id === other.room.id)).toBe(true);
+    expect(adminRooms.rooms.every((r: any) => typeof r.joinCode === "string")).toBe(true);
+  });
+
+  it("blocks participants from reading full (unpublished) results", async () => {
+    const admin = await makeUser("ADMIN");
+    const participant = await makeUser("PARTICIPANT");
+    const { room } = await setupRoom(admin.id, { categories: [{ name: "C" }] });
+    await addMembership(room.id, participant.id, null);
+
+    const { j } = await login(participant.username);
+    const denied = await call(j, "GET", `/rooms/${room.id}/results`);
+    expect([403, 404]).toContain(denied.status);
+
+    const { j: aj } = await login(admin.username);
+    const allowed = await call(aj, "GET", `/rooms/${room.id}/results`);
+    expect(allowed.status).toBe(200);
+    expect((allowed.body as any).publishedAt).toBeNull();
+  });
+
+  it("blocks participants from reading the member roster", async () => {
+    const admin = await makeUser("ADMIN");
+    const participant = await makeUser("PARTICIPANT");
+    const { room } = await setupRoom(admin.id, { categories: [{ name: "C" }] });
+    await addMembership(room.id, participant.id, null);
+
+    const { j } = await login(participant.username);
+    const denied = await call(j, "GET", `/rooms/${room.id}/members`);
+    expect([403, 404]).toContain(denied.status);
+
+    const { j: aj } = await login(admin.username);
+    const allowed = await call(aj, "GET", `/rooms/${room.id}/members`);
+    expect(allowed.status).toBe(200);
+    const members = (allowed.body as any).members as any[];
+    expect(members.some((m) => m.user.email === participant.email)).toBe(true);
+  });
+});

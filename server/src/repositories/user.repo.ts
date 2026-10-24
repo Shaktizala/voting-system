@@ -46,6 +46,10 @@ export const userRepo = {
       include: { team: { select: { id: true, name: true } } },
     });
   },
+  /** Compare-and-set: only replaces the hash if it is still `expected` (a concurrent change wins). */
+  replacePasswordHashIf(id: string, expected: string, passwordHash: string) {
+    return prisma.user.updateMany({ where: { id, passwordHash: expected }, data: { passwordHash } });
+  },
   softDelete(id: string) {
     return prisma.user.update({ where: { id }, data: { deletedAt: new Date(), status: "INACTIVE" } });
   },

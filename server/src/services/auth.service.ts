@@ -31,10 +31,11 @@ export const authService = {
     }
     recordLoginSuccess(identifier, ip);
     if (needsRehash(user.passwordHash)) {
-      // upgrade legacy hash parameters in the background
-      const id = user.id;
+      // upgrade legacy hash parameters in the background; never overwrite a
+      // password that was changed or reset after this login verified it
+      const { id, passwordHash: verified } = user;
       hashPassword(password)
-        .then((passwordHash) => userRepo.update(id, { passwordHash }))
+        .then((passwordHash) => userRepo.replacePasswordHashIf(id, verified, passwordHash))
         .catch((e) => console.error("password rehash failed", e));
     }
 

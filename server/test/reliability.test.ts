@@ -241,6 +241,28 @@ describe("access control", () => {
     expect(JSON.stringify(mine.body)).not.toContain("$argon2");
   });
 
+  it("whitespace variants of a username share one lockout counter", async () => {
+    const u = await makeUser("PARTICIPANT");
+    const variants = [u.username, ` ${u.username}`, `${u.username} `, `  ${u.username}  `, u.username.toUpperCase()];
+    for (let i = 0; i < 10; i++) {
+      const j: Jar = {};
+      absorb(j, await fetch(`${base}/api/auth/csrf`));
+      await fetch(`${base}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: cookie(j), "X-CSRF-Token": j.csrf },
+        body: JSON.stringify({ identifier: variants[i % variants.length], password: "wrong-password" }),
+      });
+    }
+    const j: Jar = {};
+    absorb(j, await fetch(`${base}/api/auth/csrf`));
+    const res = await fetch(`${base}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: cookie(j), "X-CSRF-Token": j.csrf },
+      body: JSON.stringify({ identifier: u.username, password: PASSWORD }),
+    });
+    expect(res.status).toBe(429);
+  });
+
   it("audit log is served at /api/audit", async () => {
     const r = await liveRoom(0);
     const res = await call(r.adminJar, "GET", "/audit");
@@ -258,6 +280,22 @@ describe("configuration safety", () => {
     await call(r.adminJar, "PATCH", `/rooms/${r.room.id}`, { settings: { liveResults: true } });
     const { room } = (await call(r.adminJar, "GET", `/rooms/${r.room.id}`)).body;
     expect(room.settings).toMatchObject({ allowVoteEdit: false, liveResults: true });
+  });
+
+  it("an identical resubmission is a no-op success, even where edits are disabled", async () => {
+    const r = await liveRoom(1);
+    await call(r.adminJar, "PATCH", `/rooms/${r.room.id}`, { settings: { allowVoteEdit: false } });
+    const roundId = await presentAndOpen(r.modJar, r.room.id, r.teamA.id);
+    const first = await call(r.voterJars[0], "POST", `/rounds/${roundId}/votes`, r.ballot(6));
+    expect(first.status).toBe(201);
+    // the client retries after a lost response: same ballot
+    const retry = await call(r.voterJars[0], "POST", `/rounds/${roundId}/votes`, r.ballot(6));
+    expect(retry.status).toBe(201);
+    expect(retry.body).toMatchObject({ voteId: first.body.voteId, revision: 1, unchanged: true });
+    // a different ballot is still refused in this room
+    expect((await call(r.voterJars[0], "POST", `/rounds/${roundId}/votes`, r.ballot(7))).status).toBe(409);
+    const edits = await prisma.auditLog.count({ where: { entityId: first.body.voteId, action: "vote.edit" } });
+    expect(edits).toBe(0);
   });
 
   it("a category with votes cannot be switched off mid-event", async () => {

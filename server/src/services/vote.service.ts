@@ -61,10 +61,15 @@ export const voteService = {
         if (!prevVote) {
           vote = await tx.vote.create({ data: { roundId, roomId, teamId: round.teamId, voterId } });
         } else {
+          prevScores = await tx.voteScore.findMany({ where: { voteId: prevVote.id }, select: { categoryId: true, score: true } });
+          // the same ballot again (a client retry after a lost response) is a no-op success,
+          // even where edits are disabled: nothing changes, no revision, no audit entry
+          if (sameScores(prevScores, inputs)) {
+            return { vote: prevVote, prevVote, prevScores, roomId, teamId: round.teamId, unchanged: true };
+          }
           if (!getSettings({ settings: round.settings } as Room).allowVoteEdit) {
             throw conflict("Votes are final in this room and cannot be edited");
           }
-          prevScores = await tx.voteScore.findMany({ where: { voteId: prevVote.id }, select: { categoryId: true, score: true } });
           vote = await tx.vote.update({
             where: { id: prevVote.id },
             data: { revision: { increment: 1 } },
@@ -80,13 +85,16 @@ export const voteService = {
             score: s.score,
           })),
         });
-        return { vote, prevVote, prevScores, roomId, teamId: round.teamId };
+        return { vote, prevVote, prevScores, roomId, teamId: round.teamId, unchanged: false };
       }, TX_OPTIONS)
     );
 
     // after commit: nothing below holds a lock or a second pool connection mid-transaction
-    const { vote, prevVote, prevScores, roomId, teamId } = result;
+    const { vote, prevVote, prevScores, roomId, teamId, unchanged } = result;
     const { votedCount, eligibleCount } = await eligibleCounts(roomId, roundId, teamId);
+    if (unchanged) {
+      return { voteId: vote.id, revision: vote.revision, edited: false, unchanged: true, eligibleCount, votedCount };
+    }
     rtEvents.voteSubmitted(roomId, { roundId, votedCount, eligibleCount });
 
     audit({
@@ -124,6 +132,13 @@ interface LockedRound {
   roomStatus: string;
   settings: unknown;
   roomDeletedAt: Date | null;
+}
+
+/** True when a resubmission carries exactly the stored scores. */
+function sameScores(stored: { categoryId: string; score: unknown }[], inputs: ScoreInput[]) {
+  if (stored.length !== inputs.length) return false;
+  const byCategory = new Map(stored.map((s) => [s.categoryId, Number(s.score)]));
+  return inputs.every((s) => byCategory.get(s.categoryId) === s.score);
 }
 
 /** Unknown/duplicate/missing categories and out-of-range or off-step scores are rejected. */

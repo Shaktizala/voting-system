@@ -99,7 +99,8 @@ r.post("/join", joinLimiter, wrap(async (req, res) => {
 /* ------------------------------- members -------------------------------- */
 
 r.get("/:id/members", wrap(async (req, res) => {
-  await requireViewer(req, req.params.id);
+  // Full roster includes emails/usernames — moderator-only.
+  await moderatorGuard(req, req.params.id);
   res.json({ members: await roomService.listMembers(req.params.id) });
 }));
 

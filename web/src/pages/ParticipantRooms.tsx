@@ -29,20 +29,14 @@ export default function ParticipantRooms() {
   const [error, setError] = useState<string | null>(null);
 
   const myRooms = useQuery({
-    queryKey: ["my-memberships", user?.id],
+    queryKey: ["my-rooms", user?.id],
     queryFn: async () => {
-      const rooms = (await api<{ rooms: any[] }>("/rooms")).rooms;
-      const memberships = await Promise.all(
-        rooms.map(async (room) => {
-          try {
-            const { membership } = await api<{ membership: any }>(`/rooms/${room.id}/my-membership`);
-            return membership && room.status !== "ARCHIVED" ? { room, membership } : null;
-          } catch {
-            return null;
-          }
-        })
-      );
-      return memberships.filter(Boolean) as { room: any; membership: any }[];
+      // Single scoped request: the API returns only rooms this user belongs to,
+      // each with its own membership — no per-room fan-out.
+      const { rooms } = await api<{ rooms: any[] }>("/rooms/mine");
+      return rooms
+        .filter((room) => room.status !== "ARCHIVED")
+        .map((room) => ({ room, membership: room.membership ?? { role: null, teamId: null } }));
     },
     refetchInterval: 15000,
   });

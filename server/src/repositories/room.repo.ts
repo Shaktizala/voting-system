@@ -1,19 +1,43 @@
 import { prisma } from "../db";
 import type { Prisma } from "@prisma/client";
 
+/** Public user fields for membership responses — never includes passwordHash. */
+const memberUserSelect = {
+  id: true,
+  name: true,
+  username: true,
+  email: true,
+  role: true,
+  status: true,
+  teamId: true,
+} as const;
+
+const roomCounts = {
+  _count: {
+    select: {
+      members: true,
+      roomTeams: true,
+      categories: { where: { active: true } },
+    },
+  },
+} as const;
+
 export const roomRepo = {
   list() {
     return prisma.room.findMany({
       where: { deletedAt: null },
       orderBy: { createdAt: "desc" },
+      include: roomCounts,
+    });
+  },
+  /** Rooms the user belongs to, with their own membership attached. */
+  listForUser(userId: string) {
+    return prisma.room.findMany({
+      where: { deletedAt: null, members: { some: { userId } } },
+      orderBy: { createdAt: "desc" },
       include: {
-        _count: {
-          select: {
-            members: true,
-            roomTeams: true,
-            categories: { where: { active: true } },
-          },
-        },
+        ...roomCounts,
+        members: { where: { userId }, select: { role: true, teamId: true } },
       },
     });
   },
@@ -46,7 +70,7 @@ export const roomRepo = {
   findMember(roomId: string, userId: string) {
     return prisma.roomMember.findUnique({
       where: { roomId_userId: { roomId, userId } },
-      include: { user: true, team: true },
+      include: { user: { select: memberUserSelect }, team: true },
     });
   },
   upsertMember(roomId: string, userId: string, data: Prisma.RoomMemberUncheckedCreateInput) {

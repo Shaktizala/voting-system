@@ -5,27 +5,18 @@ import { requireAuth, requirePermission } from "../middleware/auth";
 import { resultsQuerySchema } from "@voting/shared";
 import { wrap, parseQuery } from "./helpers";
 import { notFound } from "../utils/errors";
-import type { Request } from "express";
+import { moderatorGuard } from "./guards";
 
 const r = Router();
 
 r.use(requireAuth);
 
-async function memberGuard(req: Request, roomId: string) {
-  if (!req.user) throw notFound("Not found");
-  if (req.user.role === "ADMIN") return;
-  if (req.user.role === "MODERATOR") {
-    const m = await roomRepo.findMember(roomId, req.user.id);
-    if (m?.role === "MODERATOR") return;
-  }
-  const m2 = await roomRepo.findMember(roomId, req.user.id);
-  if (!m2) throw notFound("Not found");
-}
-
 /* ------------------------------ admin results ----------------------------- */
 
+// Full (including unpublished) results are moderator-only. Participants read
+// their own scope through /rooms/:roomId/my-results, which respects publishing.
 r.get("/rooms/:roomId/results", wrap(async (req, res) => {
-  await memberGuard(req, req.params.roomId);
+  await moderatorGuard(req, req.params.roomId);
   res.json(await resultsService.forRoom(req.params.roomId, req.query.roundId as string | undefined));
 }));
 

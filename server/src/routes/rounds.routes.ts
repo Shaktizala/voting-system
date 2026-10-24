@@ -9,32 +9,16 @@ import { writeLimiter } from "../middleware/rateLimit";
 import { selectTeamSchema, voteSubmitSchema } from "@voting/shared";
 import { wrap, parseBody } from "./helpers";
 import { notFound } from "../utils/errors";
+import { memberGuard, moderatorGuard } from "./guards";
 import { prisma } from "../db";
 import type { VotingRound } from "@prisma/client";
-import type { Request } from "express";
 
 const r = Router();
 
 r.use(requireAuth);
 
 /* ----------------------------- access guards ------------------------------ */
-
-export async function moderatorGuard(req: Request, roomId: string) {
-  if (!req.user) throw notFound("Not found");
-  if (req.user.role === "ADMIN") return;
-  if (req.user.role === "MODERATOR") {
-    const m = await roomRepo.findMember(roomId, req.user.id);
-    if (m?.role === "MODERATOR") return;
-  }
-  throw notFound("Not found"); // hide room existence from unauthorized users
-}
-
-export async function memberGuard(req: Request, roomId: string) {
-  if (!req.user) throw notFound("Not found");
-  if (req.user.role === "ADMIN") return;
-  const m = await roomRepo.findMember(roomId, req.user.id);
-  if (!m) throw notFound("Not found");
-}
+// memberGuard / moderatorGuard live in ./guards and are shared with rooms & results.
 
 async function fetchRound(roundId: string): Promise<VotingRound> {
   const round = await prisma.votingRound.findUnique({ where: { id: roundId } });

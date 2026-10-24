@@ -6,7 +6,7 @@ import compression from "compression";
 import morgan from "morgan";
 import { env } from "./config";
 import { attachUser, ensureCsrfCookie, verifyCsrf } from "./middleware/auth";
-import { apiLimiter } from "./middleware/rateLimit";
+import { apiLimiter, anonLimiter } from "./middleware/rateLimit";
 import { errorHandler, notFoundHandler } from "./middleware/errors";
 import authRoutes from "./routes/auth.routes";
 import participantsRoutes from "./routes/participants.routes";
@@ -33,7 +33,9 @@ export function createApp(): Express {
   app.use(cookieParser());
   app.use(morgan(env.NODE_ENV === "production" ? "tiny" : "dev"));
 
-  app.use("/api", attachUser, apiLimiter, ensureCsrfCookie);
+  // apiLimiter covers authenticated traffic (per user); anonLimiter covers
+  // pre-login traffic (per IP, high ceiling) so a shared venue IP is safe.
+  app.use("/api", attachUser, apiLimiter, anonLimiter, ensureCsrfCookie);
   // mutating requests must carry X-CSRF-Token matching the csrf cookie
   app.use("/api", verifyCsrf);
 

@@ -1,33 +1,77 @@
 import rateLimit from "express-rate-limit";
+import type { Request } from "express";
 import { tooMany } from "../utils/errors";
 import { audit } from "../repositories/audit.repo";
 import { isTest } from "../config";
 
 const testAware = (limit: number) => (isTest ? 100_000 : limit);
 
-/** Generic API limiter */
+/**
+ * Participants at a live event usually share one venue/NAT IP, so per-IP limits
+ * would throttle everybody at once. Authenticated traffic is therefore keyed by
+ * user id; only anonymous pre-login traffic is keyed by IP (with a high ceiling).
+ */
+export function userKey(req: Request): string {
+  return req.user?.id ? `u:${req.user.id}` : `ip:${req.ip ?? "unknown"}`;
+}
+
+/** Anonymous fallback key (IP) for unauthenticated traffic. */
+function ipKey(req: Request): string {
+  return `ip:${req.ip ?? "unknown"}`;
+}
+
+/** Login is keyed by the attempted account so a shared NAT can't lock out others. */
+export function loginKey(req: Request): string {
+  const identifier =
+    typeof req.body?.identifier === "string" ? req.body.identifier.trim().toLowerCase() : "";
+  return identifier ? `login:${identifier}` : ipKey(req);
+}
+
+/** Generic API limiter — authenticated requests, keyed per user. */
 export const apiLimiter = rateLimit({
   windowMs: 60_000,
   limit: testAware(300),
   standardHeaders: "draft-7",
   legacyHeaders: false,
+  keyGenerator: userKey,
+  skip: (req) => !req.user, // unauthenticated traffic is handled by anonLimiter
 });
 
-/** Strict limiter for /auth/login */
-export const loginLimiter = rateLimit({
-  windowMs: 15 * 60_000,
-  limit: testAware(20), // per IP; per-account lockout below
+/**
+ * Unauthenticated (pre-login) traffic. Keyed by IP but with a much higher
+ * ceiling than the old per-IP 300/min, so a room full of people logging in from
+ * one venue IP is not blocked by each other.
+ *
+ * `/auth/login` is exempt from this per-minute limit: login is governed solely
+ * by {@link loginLimiter} (per account) + the account lockout, so an event-wide
+ * sign-in burst is never throttled by the minute window.
+ */
+export const anonLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: testAware(1000),
   standardHeaders: "draft-7",
   legacyHeaders: false,
+  keyGenerator: ipKey,
+  skip: (req) => !!req.user || req.path === "/auth/login",
+});
+
+/** Strict limiter for /auth/login — per account (shared IP no longer blocks). */
+export const loginLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  limit: testAware(20), // per account identifier; per-account lockout below
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  keyGenerator: loginKey,
   handler: (_req, _res, next) => next(tooMany()),
 });
 
-/** Vote + join endpoints: burst protection. */
+/** Vote + join endpoints: burst protection, per user. */
 export const writeLimiter = rateLimit({
   windowMs: 60_000,
   limit: testAware(60),
   standardHeaders: "draft-7",
   legacyHeaders: false,
+  keyGenerator: userKey,
   handler: (_req, _res, next) => next(tooMany("Too many requests, slow down")),
 });
 
@@ -76,11 +120,12 @@ export function recordLoginSuccess(identifier: string, ip: string) {
   failures.delete(key(identifier, ip));
 }
 
-/** Room join codes: 10 attempts / 5 minutes per IP */
+/** Room join codes: 10 attempts / 5 minutes per user (shared Wi-Fi must not block). */
 export const joinLimiter = rateLimit({
   windowMs: 5 * 60_000,
   limit: testAware(10),
   standardHeaders: "draft-7",
   legacyHeaders: false,
+  keyGenerator: userKey,
   handler: (_req, _res, next) => next(tooMany("Too many join attempts")),
 });

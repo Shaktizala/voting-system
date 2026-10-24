@@ -231,6 +231,16 @@ describe("access control", () => {
     expect((await call(j, "GET", "/rooms")).status).toBe(200);
   });
 
+  it("never sends password hashes to any client", async () => {
+    const r = await liveRoom(1);
+    const people = await call(r.adminJar, "GET", "/participants");
+    expect(people.status).toBe(200);
+    expect(JSON.stringify(people.body)).not.toContain("passwordHash");
+    expect(JSON.stringify(people.body)).not.toContain("$argon2");
+    const mine = await call(r.voterJars[0], "GET", `/rooms/${r.room.id}/my-membership`);
+    expect(JSON.stringify(mine.body)).not.toContain("$argon2");
+  });
+
   it("audit log is served at /api/audit", async () => {
     const r = await liveRoom(0);
     const res = await call(r.adminJar, "GET", "/audit");

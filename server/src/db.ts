@@ -1,9 +1,5 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 
-declare global {
-  // eslint-disable-next-line no-var
-  var prisma: PrismaClient | undefined;
-}
 
 /**
  * Pool sizing: Prisma defaults to (2 × CPUs + 1) connections. Live voting is a
@@ -23,12 +19,21 @@ function datasourceUrl(): string | undefined {
   return url.toString();
 }
 
-export const prisma =
-  global.prisma ??
-  new PrismaClient({
+function createClient() {
+  return new PrismaClient({
     datasourceUrl: datasourceUrl(),
+    // secure by default: password hashes never leave the auth code paths that opt in
+    omit: { user: { passwordHash: true } },
     log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
   });
+}
+
+declare global {
+  // eslint-disable-next-line no-var
+  var prisma: ReturnType<typeof createClient> | undefined;
+}
+
+export const prisma = global.prisma ?? createClient();
 
 if (process.env.NODE_ENV !== "production") global.prisma = prisma;
 

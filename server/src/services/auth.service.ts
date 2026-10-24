@@ -68,7 +68,7 @@ export const authService = {
   },
 
   async changePassword(userId: string, currentPassword: string, newPassword: string, token?: string) {
-    const user = await userRepo.findById(userId);
+    const user = await userRepo.findByIdWithPassword(userId);
     if (!user) throw unauthorized();
     const ok = await verifyPassword(user.passwordHash, currentPassword);
     if (!ok) throw new HttpError(400, "Current password is incorrect");

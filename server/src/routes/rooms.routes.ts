@@ -11,25 +11,38 @@ import {
 } from "@voting/shared";
 import { wrap, parseBody } from "./helpers";
 import { notFound } from "../utils/errors";
+import { memberGuard, moderatorGuard, isRoomModerator } from "./guards";
 import { prisma } from "../db";
 
 const r = Router();
 
 r.use(requireAuth);
 
-/** Non-admins must be room members (participants of open rooms may inspect by join). */
-async function requireViewer(req: Parameters<typeof roomService.getById>[0] extends never ? never : any, roomId: string) {
-  if (!req.user) throw notFound("Room not found");
-  if (req.user.role === "ADMIN") return;
-  if (req.user.role === "MODERATOR" && (await roomRepo.findMember(roomId, req.user.id))?.role === "MODERATOR") return;
-  const member = await roomRepo.findMember(roomId, req.user.id);
-  if (!member) throw notFound("Room not found");
+/** Join codes are operational secrets: only admins and room moderators see them. */
+function redactJoinCode<T extends { joinCode?: string | null }>(room: T, canManage: boolean): T {
+  if (canManage) return room;
+  const { joinCode: _joinCode, ...safe } = room;
+  void _joinCode;
+  return safe as T;
 }
 
 /* ------------------------------ room CRUD ------------------------------- */
 
-r.get("/", wrap(async (_req, res) => {
-  res.json({ rooms: await roomService.list() });
+/**
+ * Admins receive every room; everyone else receives only rooms they belong to.
+ * A caller may never see another room's join code.
+ */
+r.get("/", wrap(async (req, res) => {
+  const rooms = await roomService.listForViewer(req.user!.id, req.user!.role);
+  const canManage = req.user!.role === "ADMIN";
+  res.json({ rooms: rooms.map((room) => redactJoinCode(room, canManage)) });
+}));
+
+/** Explicitly membership-scoped list used by the participant home page. */
+r.get("/mine", wrap(async (req, res) => {
+  const rooms = await roomService.listForViewer(req.user!.id, req.user!.role);
+  const canManage = req.user!.role === "ADMIN";
+  res.json({ rooms: rooms.map((room) => redactJoinCode(room, canManage)) });
 }));
 
 r.post("/", requirePermission("rooms:write"), wrap(async (req, res) => {
@@ -43,11 +56,12 @@ r.post("/", requirePermission("rooms:write"), wrap(async (req, res) => {
 }));
 
 r.get("/:id", wrap(async (req, res) => {
-  await requireViewer(req, req.params.id);
+  await memberGuard(req, req.params.id);
   const room = await roomService.getById(req.params.id);
+  const canManage = await isRoomModerator(req, req.params.id);
   res.json({
-    room: { ...room, settings: getSettings(room) },
-    joinUrl: `${req.protocol}://${req.get("host")}/join/${room.joinCode}`,
+    room: redactJoinCode({ ...room, settings: getSettings(room) }, canManage),
+    joinUrl: canManage ? `${req.protocol}://${req.get("host")}/join/${room.joinCode}` : undefined,
   });
 }));
 
@@ -95,14 +109,14 @@ r.put("/:id/members", requirePermission("rooms:write"), wrap(async (req, res) =>
 }));
 
 r.delete("/:id/members/:userId", requirePermission("rooms:write"), wrap(async (req, res) => {
-  await requireViewer(req, req.params.id);
+  await memberGuard(req, req.params.id);
   res.json(await roomService.removeMember(req.params.id, req.params.userId, req.user!.id, req.ip));
 }));
 
 /* ----------------------------- room teams ------------------------------- */
 
 r.get("/:id/teams", wrap(async (req, res) => {
-  await requireViewer(req, req.params.id);
+  await memberGuard(req, req.params.id);
   res.json({ roomTeams: await roomService.listRoomTeams(req.params.id) });
 }));
 
@@ -114,7 +128,7 @@ r.put("/:id/teams", requirePermission("rooms:write"), wrap(async (req, res) => {
 /* ------------------------------ categories ------------------------------ */
 
 r.get("/:id/categories", wrap(async (req, res) => {
-  await requireViewer(req, req.params.id);
+  await memberGuard(req, req.params.id);
   res.json({ categories: await categoryService.listForRoom(req.params.id) });
 }));
 
@@ -145,7 +159,7 @@ r.get("/:id/my-membership", wrap(async (req, res) => {
 /* --------------------------- full state snapshot ------------------------- */
 
 r.get("/:id/full", wrap(async (req, res) => {
-  await requireViewer(req, req.params.id);
+  await memberGuard(req, req.params.id);
   const snap = await roomRepo.fullSnapshot(req.params.id);
   if (!snap) throw notFound("Room not found");
   const settings = getSettings(snap);

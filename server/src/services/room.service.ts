@@ -1,7 +1,7 @@
 import { prisma } from "../db";
 import { roomRepo } from "../repositories/room.repo";
 import { categoryRepo } from "../repositories/category.repo";
-import { roomSettingsSchema, type RoomSettings } from "@voting/shared";
+import { roomSettingsSchema, type RoomSettings, type Role } from "@voting/shared";
 import { badRequest, conflict, notFound, HttpError } from "../utils/errors";
 import { generateJoinCode } from "../utils/codes";
 import { sanitizeText } from "../utils/sanitize";
@@ -21,6 +21,20 @@ export function getSettings(room: Room): RoomSettings {
 export const roomService = {
   list() {
     return roomRepo.list();
+  },
+
+  /**
+   * Rooms visible to a viewer: admins see every room; everyone else sees only
+   * rooms they belong to, with their own membership attached. In both cases the
+   * shape is `{ ...room, membership: { role, teamId } | null }`.
+   */
+  async listForViewer(userId: string, role: Role) {
+    if (role === "ADMIN") {
+      const rooms = await roomRepo.list();
+      return rooms.map((room) => ({ ...room, membership: { role: "ADMIN" as const, teamId: null } }));
+    }
+    const rooms = await roomRepo.listForUser(userId);
+    return rooms.map(({ members, ...room }) => ({ ...room, membership: members[0] ?? null }));
   },
 
   async create(

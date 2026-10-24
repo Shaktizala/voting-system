@@ -41,6 +41,10 @@ export const apiLimiter = rateLimit({
  * Unauthenticated (pre-login) traffic. Keyed by IP but with a much higher
  * ceiling than the old per-IP 300/min, so a room full of people logging in from
  * one venue IP is not blocked by each other.
+ *
+ * `/auth/login` is exempt from this per-minute limit: login is governed solely
+ * by {@link loginLimiter} (per account) + the account lockout, so an event-wide
+ * sign-in burst is never throttled by the minute window.
  */
 export const anonLimiter = rateLimit({
   windowMs: 60_000,
@@ -48,7 +52,7 @@ export const anonLimiter = rateLimit({
   standardHeaders: "draft-7",
   legacyHeaders: false,
   keyGenerator: ipKey,
-  skip: (req) => !!req.user,
+  skip: (req) => !!req.user || req.path === "/auth/login",
 });
 
 /** Strict limiter for /auth/login — per account (shared IP no longer blocks). */

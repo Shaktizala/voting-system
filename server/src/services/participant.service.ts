@@ -10,6 +10,7 @@ import { env } from "../config";
 import { parse } from "papaparse";
 import ExcelJS from "exceljs";
 import { plainify } from "../utils/plainify";
+import { publicUser, publicUsers } from "../utils/serialize";
 import type { Prisma } from "@prisma/client";
 
 export interface TempCredential {
@@ -20,8 +21,8 @@ export interface TempCredential {
 }
 
 export const participantService = {
-  list() {
-    return userRepo.list();
+  async list() {
+    return publicUsers(await userRepo.list());
   },
 
   async create(input: { name: string; username: string; email: string; role: string; teamId?: string | null }, actorId: string, ip?: string) {
@@ -48,7 +49,7 @@ export const participantService = {
       after: { username, email, role: input.role, teamId: input.teamId ?? null },
       ip,
     });
-    return { user, tempPassword };
+    return { user: publicUser(user), tempPassword };
   },
 
   async patch(id: string, patch: Record<string, unknown>, actorId: string, ip?: string) {
@@ -100,7 +101,7 @@ export const participantService = {
       after: plainify(data),
       ip,
     });
-    return updated;
+    return publicUser(updated);
   },
 
   /** Admin password reset → new one-time temporary password, forces change at next login. */

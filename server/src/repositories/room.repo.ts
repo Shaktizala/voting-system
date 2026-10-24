@@ -70,7 +70,7 @@ export const roomRepo = {
   findMember(roomId: string, userId: string) {
     return prisma.roomMember.findUnique({
       where: { roomId_userId: { roomId, userId } },
-      include: { user: true, team: true },
+      include: { user: { select: memberUserSelect }, team: true },
     });
   },
   upsertMember(roomId: string, userId: string, data: Prisma.RoomMemberUncheckedCreateInput) {

@@ -36,6 +36,8 @@ export default function ParticipantRooms() {
   };
 
   const rooms = myRooms.data ?? [];
+  // a failed background refetch keeps the last good list; only a first load can fail visibly
+  const loadFailed = myRooms.isError && !myRooms.data;
   const live = rooms.filter(({ room }) => room.status === "ACTIVE");
   // what's happening in each active room right now (server caches the snapshot per room)
   const snaps = useQueries({
@@ -56,7 +58,9 @@ export default function ParticipantRooms() {
   };
   const subtitle = myRooms.isLoading
     ? "Loading your rooms…"
-    : rooms.length === 0
+    : loadFailed
+      ? "Couldn't load your rooms."
+      : rooms.length === 0
       ? "You're not in a room yet. Join one with the code from your organiser."
       : live.length === 0
         ? "None of your rooms is open for voting right now."
@@ -71,7 +75,7 @@ export default function ParticipantRooms() {
       <PageTitle title="My rooms" subtitle={subtitle} />
 
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <section aria-label="Rooms" className={`min-w-0 ${rooms.length === 0 && !myRooms.isLoading ? "lg:order-2" : ""}`}>
+        <section aria-label="Rooms" className={`min-w-0 ${rooms.length === 0 && !myRooms.isLoading && !loadFailed ? "lg:order-2" : ""}`}>
           {myRooms.isLoading ? (
             <div className="overflow-hidden rounded-[10px] border border-line">
               {[0, 1, 2].map((i) => (
@@ -81,6 +85,13 @@ export default function ParticipantRooms() {
                 </div>
               ))}
             </div>
+          ) : loadFailed ? (
+            <p className="rounded-[10px] border border-line px-4 py-4 text-sm text-ink-700">
+              Couldn't load your rooms.{" "}
+              <button type="button" className="font-medium underline underline-offset-4" onClick={() => myRooms.refetch()}>
+                Try again
+              </button>
+            </p>
           ) : rooms.length === 0 ? (
             <p className="rounded-[10px] border border-dashed border-ink-300 px-4 py-4 text-sm text-ink-700">
               Rooms you join, or are assigned to, show up here.

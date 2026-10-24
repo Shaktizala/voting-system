@@ -133,7 +133,11 @@ export default function RoomLive() {
         <div className="min-w-0">
           <h1 className="text-[22px] font-semibold leading-tight text-ink-950">{snap.room.name}</h1>
           <p className="mt-1 text-sm text-ink-500">
-            {snap.room.status === "ACTIVE" ? finding : "This room is closed."}
+            {snap.room.status === "ACTIVE"
+              ? finding
+              : snap.room.status === "DRAFT"
+                ? "This room isn't open yet. Voting starts once an admin activates it."
+                : "This room is closed."}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">

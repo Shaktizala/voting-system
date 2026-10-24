@@ -282,7 +282,8 @@ const STATUS_STYLES: Record<string, { chip: string; dot: string; label: string }
 
 export function StatusBadge({ status }: { status: string | null | undefined }) {
   const key = status ?? "DRAFT";
-  const s = STATUS_STYLES[key] ?? STATUS_STYLES.DRAFT;
+  // unknown states keep the neutral style but say what they are
+  const s = STATUS_STYLES[key] ?? { ...STATUS_STYLES.DRAFT, label: key.charAt(0) + key.slice(1).toLowerCase().replace(/_/g, " ") };
   return (
     <span className={`inline-flex h-6 flex-none items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-xs font-medium ${s.chip}`}>
       <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />

@@ -15,17 +15,15 @@ import {
   SectionHeading,
   Skeleton,
   StatCard,
+  StatStrip,
   StatusBadge,
 } from "../../components/ui";
 import { useToast } from "../../contexts/Toast";
 import {
   IconArrowRight,
-  IconChart,
-  IconPlus,
   IconRooms,
   IconSettings,
   IconTeams,
-  IconTrophy,
   IconUsers,
 } from "../../components/icons";
 
@@ -71,26 +69,25 @@ export default function Rooms() {
   return (
     <>
       <PageTitle
-        eyebrow="Sessions"
+
         title="Rooms"
         subtitle="Evaluation rooms with their own join codes, categories, and state."
       />
 
-      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <StatCard label="Total rooms" value={listQ.isLoading ? <Skeleton className="h-8 w-10" /> : rooms.length} icon={<IconRooms size={19} />} tone="brand" />
-        <StatCard label="Active now" value={listQ.isLoading ? <Skeleton className="h-8 w-10" /> : activeRooms} hint={draftRooms > 0 ? `${draftRooms} draft${draftRooms === 1 ? "" : "s"} waiting` : "Ready for voting"} icon={<IconChart size={19} />} tone="jade" />
-        <StatCard label="Published results" value={listQ.isLoading ? <Skeleton className="h-8 w-10" /> : publishedRooms} icon={<IconTrophy size={19} />} tone="ocean" />
+      <div className="mb-6">
+          <StatStrip columns={3}>
+        <StatCard label="Total rooms" value={listQ.isLoading ? <Skeleton className="h-7 w-10" /> : rooms.length} />
+        <StatCard label="Active now" value={listQ.isLoading ? <Skeleton className="h-7 w-10" /> : activeRooms} hint={draftRooms > 0 ? `${draftRooms} draft${draftRooms === 1 ? "" : "s"} waiting` : "Ready for voting"} />
+        <StatCard label="Published results" value={listQ.isLoading ? <Skeleton className="h-7 w-10" /> : publishedRooms} />
+          </StatStrip>
       </div>
 
       <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.55fr)]">
         <Card className="xl:sticky xl:top-6" >
           <div id="new-room" className="flex items-start gap-3">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 ring-1 ring-inset ring-brand-100">
-              <IconPlus size={19} />
-            </span>
             <div>
               <h2 className="font-display text-base font-semibold text-ink-900">New room</h2>
-              <p className="mt-0.5 text-xs text-ink-500">A join code is generated automatically.</p>
+              <p className="mt-0.5 text-[13px] text-ink-500">A join code is generated automatically.</p>
             </div>
           </div>
           <div className="mt-5 space-y-3">
@@ -110,11 +107,11 @@ export default function Rooms() {
             </Button>
           </div>
           <div className="mt-5 rounded-xl border border-line bg-ink-50/50 px-3.5 py-3">
-            <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-500">
+            <p className="flex items-center gap-1.5 text-[13px] font-medium text-ink-500">
               <IconSettings size={12} />
               Next steps
             </p>
-            <p className="mt-1.5 text-[12px] leading-relaxed text-ink-500">
+            <p className="mt-1.5 text-[13px] leading-relaxed text-ink-500">
               Configure categories, link teams, and assign members. Activate the room when you're
               ready to open voting.
             </p>
@@ -147,17 +144,7 @@ export default function Rooms() {
           ) : (
             <div className="space-y-3">
               {rooms.map((room) => (
-                <Card key={room.id} className="group overflow-hidden p-0 transition-all duration-300 hover:border-brand-200 hover:shadow-lift">
-                  <span
-                    aria-hidden="true"
-                    className={`absolute inset-x-0 top-0 h-0.5 ${
-                      room.status === "ACTIVE"
-                        ? "bg-gradient-to-r from-jade-400 to-jade-200"
-                        : room.status === "CLOSED"
-                          ? "bg-gradient-to-r from-coral-400 to-coral-200"
-                          : "bg-gradient-to-r from-brand-400 to-brand-200"
-                    }`}
-                  />
+                <Card key={room.id} className="overflow-hidden p-0 transition-colors hover:border-ink-300">
                   <div className="p-5 sm:p-6">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -170,7 +157,7 @@ export default function Rooms() {
                           </Link>
                           <StatusBadge status={room.status} />
                           {room.publishedAt && (
-                            <span className="rounded-full bg-ocean-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-ocean-700 ring-1 ring-inset ring-ocean-200">
+                            <span className="rounded-full bg-ocean-50 px-2 py-0.5 text-[13px] font-medium text-ocean-700 ring-1 ring-inset ring-ocean-200">
                               Results published
                             </span>
                           )}
@@ -182,13 +169,13 @@ export default function Rooms() {
                         )}
                       </div>
                       {room.joinCode && (
-                        <span className="rounded-lg border border-line bg-ink-50/70 px-2.5 py-1.5 font-mono text-[11px] font-semibold tracking-[0.14em] text-ink-600" title="Join code">
+                        <span className="rounded-md bg-ink-100 px-2 py-1 font-mono text-[13px] text-ink-800" title="Join code" /* taste-skill-ignore: a join code is a key */>
                           {room.joinCode}
                         </span>
                       )}
                     </div>
 
-                    <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] font-medium text-ink-500">
+                    <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] font-medium text-ink-500">
                       <span className="inline-flex items-center gap-1.5">
                         <IconUsers size={13} className="text-ink-400" />
                         {room._count.members} participants
@@ -204,30 +191,30 @@ export default function Rooms() {
                     </div>
 
                     <div className="mt-4 flex flex-wrap items-center gap-1.5 border-t border-line pt-4">
-                      <Link to={`/admin/rooms/${room.id}`} className={buttonClass("secondary", "px-3 py-2 text-xs")}>
+                      <Link to={`/admin/rooms/${room.id}`} className={buttonClass("secondary", "px-3 py-2 text-[13px]")}>
                         Configure
                       </Link>
-                      <Link to={`/room/${room.id}`} className={buttonClass("ghost", "px-3 py-2 text-xs")}>
+                      <Link to={`/room/${room.id}`} className={buttonClass("ghost", "px-3 py-2 text-[13px]")}>
                         Live dashboard
                         <IconArrowRight size={13} />
                       </Link>
                       <span className="mx-1 hidden h-4 w-px bg-line sm:block" aria-hidden="true" />
                       {room.status === "DRAFT" && (
-                        <Button className="px-3 py-2 text-xs" onClick={() => setStatus.mutate({ id: room.id, status: "ACTIVE" })}>
+                        <Button className="px-3 py-2 text-[13px]" onClick={() => setStatus.mutate({ id: room.id, status: "ACTIVE" })}>
                           Activate
                         </Button>
                       )}
                       {room.status === "ACTIVE" && (
-                        <Button variant="secondary" className="px-3 py-2 text-xs" onClick={() => setStatus.mutate({ id: room.id, status: "CLOSED" })}>
+                        <Button variant="secondary" className="px-3 py-2 text-[13px]" onClick={() => setStatus.mutate({ id: room.id, status: "CLOSED" })}>
                           Close
                         </Button>
                       )}
                       {room.status === "CLOSED" && (
-                        <Button variant="secondary" className="px-3 py-2 text-xs" onClick={() => setStatus.mutate({ id: room.id, status: "ARCHIVED" })}>
+                        <Button variant="secondary" className="px-3 py-2 text-[13px]" onClick={() => setStatus.mutate({ id: room.id, status: "ARCHIVED" })}>
                           Archive
                         </Button>
                       )}
-                      <Button variant="ghost" className="ml-auto px-3 py-2 text-xs" onClick={() => setConfirmDup(room)}>
+                      <Button variant="ghost" className="ml-auto px-3 py-2 text-[13px]" onClick={() => setConfirmDup(room)}>
                         Duplicate
                       </Button>
                     </div>

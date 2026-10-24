@@ -6,13 +6,7 @@ import {
   type ReactNode,
   type SelectHTMLAttributes,
 } from "react";
-import {
-  IconAlert,
-  IconCheck,
-  IconChevronDown,
-  IconInfo,
-  IconSparkles,
-} from "./icons";
+import { IconAlert, IconCheck, IconChevronDown, IconInfo } from "./icons";
 
 /* -------------------------------- layout -------------------------------- */
 
@@ -25,39 +19,28 @@ export function Card({
 }) {
   return (
     <div
-      className={`relative rounded-2xl border border-line bg-white p-5 shadow-card sm:p-6 ${className}`}
+      className={`relative rounded-[10px] border border-line bg-white p-5 ${className}`}
     >
       {children}
     </div>
   );
 }
 
+/** Title row: a 22px noun, an optional grey line about the data, real actions on the right. */
 export function PageTitle({
   title,
   subtitle,
   actions,
-  eyebrow,
 }: {
   title: string;
-  subtitle?: string;
+  subtitle?: ReactNode;
   actions?: ReactNode;
-  eyebrow?: string;
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-4 sm:mb-8">
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
       <div className="min-w-0">
-        {eyebrow && (
-          <p className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-600">
-            <span className="h-1 w-6 rounded-full bg-gradient-to-r from-brand-500 to-jade-400" aria-hidden="true" />
-            {eyebrow}
-          </p>
-        )}
-        <h1 className="font-display text-2xl font-semibold tracking-tight text-ink-950 sm:text-[2rem] sm:leading-[1.15]">
-          {title}
-        </h1>
-        {subtitle && (
-          <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-ink-500">{subtitle}</p>
-        )}
+        <h1 className="text-[22px] font-semibold leading-tight text-ink-950">{title}</h1>
+        {subtitle && <p className="mt-1 max-w-2xl text-sm leading-relaxed text-ink-500">{subtitle}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
@@ -76,15 +59,11 @@ export function SectionHeading({
   count?: number;
 }) {
   return (
-    <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+    <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
       <div>
-        <div className="flex items-center gap-2.5">
-          <h2 className="font-display text-lg font-semibold tracking-tight text-ink-900">{title}</h2>
-          {count !== undefined && (
-            <span className="rounded-full bg-ink-100 px-2 py-0.5 text-[11px] font-semibold text-ink-600">
-              {count}
-            </span>
-          )}
+        <div className="flex items-baseline gap-2">
+          <h2 className="text-base font-semibold text-ink-950">{title}</h2>
+          {count !== undefined && <span className="num text-sm text-ink-500">{count}</span>}
         </div>
         {description && <p className="mt-1 text-sm text-ink-500">{description}</p>}
       </div>
@@ -96,7 +75,7 @@ export function SectionHeading({
 /* --------------------------------- form --------------------------------- */
 
 export const fieldClass =
-  "w-full rounded-xl border border-line bg-white px-3.5 py-2.5 text-sm text-ink-900 shadow-[inset_0_1px_1px_rgb(20_16_50_/_0.02)] outline-none transition duration-200 placeholder:text-ink-400 hover:border-ink-300 focus:border-brand-400 focus:ring-4 focus:ring-brand-500/10 disabled:cursor-not-allowed disabled:bg-ink-50 disabled:text-ink-400";
+  "h-10 w-full rounded-lg border border-control bg-white px-3 text-sm text-ink-900 outline-none transition-colors placeholder:text-ink-400 hover:border-ink-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25 disabled:cursor-not-allowed disabled:bg-ink-50 disabled:text-ink-500";
 
 export function LabelledInput(
   props: InputHTMLAttributes<HTMLInputElement> & {
@@ -116,9 +95,9 @@ export function LabelledInput(
   return (
     <label className="block" htmlFor={inputId}>
       <span className="mb-1.5 flex items-baseline justify-between gap-2">
-        <span className="text-[13px] font-semibold text-ink-700">{label}</span>
+        <span className="text-sm font-medium text-ink-800">{label}</span>
         {hint && (
-          <span id={hintId} className="text-[11px] font-normal text-ink-400">
+          <span id={hintId} className="text-xs font-normal text-ink-500">
             {hint}
           </span>
         )}
@@ -155,7 +134,7 @@ export function LabelledSelect(
   const selectId = id ?? autoId;
   return (
     <label className="block" htmlFor={selectId}>
-      {label && <span className="mb-1.5 block text-[13px] font-semibold text-ink-700">{label}</span>}
+      {label && <span className="mb-1.5 block text-sm font-medium text-ink-800">{label}</span>}
       <span className="relative block">
         <select
           id={selectId}
@@ -182,24 +161,19 @@ export type ButtonVariant =
   | "success"
   | "soft";
 
+/* One control height (36px), one radius (8px). One filled primary per screen, near-black. */
 const BUTTON_BASE =
-  "inline-flex select-none items-center justify-center gap-1.5 rounded-xl px-3.5 py-2.5 text-sm font-semibold leading-none outline-none transition-all duration-200 focus-visible:ring-4 disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex h-9 select-none items-center justify-center gap-1.5 rounded-lg px-3.5 text-sm font-medium leading-none outline-none transition-[background-color,border-color,color,transform] duration-150 active:translate-y-px focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-55";
 
 const BUTTON_STYLES: Record<ButtonVariant, string> = {
-  primary:
-    "bg-gradient-to-b from-brand-500 to-brand-600 text-white shadow-glow hover:from-brand-500 hover:to-brand-700 hover:shadow-[0_20px_44px_-16px_rgb(108_92_231_/_0.7)] active:translate-y-px focus-visible:ring-brand-500/25",
-  success:
-    "bg-gradient-to-b from-jade-500 to-jade-600 text-white shadow-glow-mint hover:from-jade-500 hover:to-jade-700 active:translate-y-px focus-visible:ring-jade-500/25",
-  secondary:
-    "border border-line bg-white text-ink-700 shadow-[0_1px_2px_rgb(20_16_50_/_0.04)] hover:border-brand-200 hover:bg-brand-50/60 hover:text-ink-900 active:translate-y-px focus-visible:ring-brand-500/20",
-  ghost:
-    "text-ink-600 hover:bg-ink-900/[0.055] hover:text-ink-900 active:translate-y-px focus-visible:ring-brand-500/20",
-  dangerGhost:
-    "text-coral-600 hover:bg-coral-50 hover:text-coral-700 active:translate-y-px focus-visible:ring-coral-500/20",
-  danger:
-    "bg-gradient-to-b from-coral-500 to-coral-600 text-white shadow-[0_18px_40px_-18px_rgb(244_63_85_/_0.55)] hover:from-coral-500 hover:to-coral-700 active:translate-y-px focus-visible:ring-coral-500/25",
-  soft:
-    "bg-brand-50 text-brand-700 ring-1 ring-inset ring-brand-100 hover:bg-brand-100/80 active:translate-y-px focus-visible:ring-brand-500/20",
+  primary: "bg-ink-950 text-white hover:bg-ink-700",
+  success: "bg-ink-950 text-white hover:bg-ink-700",
+  secondary: "border border-control bg-white text-ink-800 hover:border-ink-400 hover:bg-ink-50",
+  ghost: "text-ink-700 hover:bg-ink-100 hover:text-ink-950",
+  dangerGhost: "text-coral-700 hover:bg-coral-50 hover:text-coral-800",
+  // destructive actions are outlined in the negative colour, never a red slab
+  danger: "border border-coral-300 bg-white text-coral-700 hover:border-coral-500 hover:bg-coral-50",
+  soft: "bg-ink-100 text-ink-800 hover:bg-ink-200",
 };
 
 /** Shared button styling for router links that need to look like a button. */
@@ -241,7 +215,7 @@ export function CheckRow({
       />
       <span
         aria-hidden="true"
-        className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border border-ink-300 bg-white text-transparent shadow-[0_1px_2px_rgb(20_16_50_/_0.04)] transition-all duration-150 peer-checked:border-brand-600 peer-checked:bg-brand-600 peer-checked:text-white peer-focus-visible:ring-4 peer-focus-visible:ring-brand-500/20"
+        className="mt-0.5 grid h-[18px] w-[18px] shrink-0 place-items-center rounded-[4px] border-2 border-ink-400 bg-white text-transparent transition-colors duration-150 peer-checked:border-ink-950 peer-checked:bg-ink-950 peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-brand-500" /* taste-skill-ignore: hides the unchecked tick, not gradient text */
       >
         <IconCheck size={12} strokeWidth={3} />
       </span>
@@ -262,7 +236,7 @@ export function Toggle({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <label className="flex cursor-pointer items-start justify-between gap-4 rounded-xl border border-line bg-white px-4 py-3.5 transition-colors hover:border-ink-200">
+    <label className="flex cursor-pointer items-start justify-between gap-4 rounded-[10px] border border-line bg-white px-4 py-3.5 transition-colors hover:border-ink-300">
       <span>
         <span className="block text-sm font-medium text-ink-800">{label}</span>
         {description && <span className="mt-0.5 block text-xs leading-relaxed text-ink-500">{description}</span>}
@@ -275,8 +249,8 @@ export function Toggle({
           aria-label={label}
           className="peer sr-only"
         />
-        <span className="absolute inset-0 rounded-full bg-ink-200 transition-colors duration-200 peer-checked:bg-brand-600 peer-focus-visible:ring-4 peer-focus-visible:ring-brand-500/20" />
-        <span className="pointer-events-none absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 peer-checked:translate-x-5" />
+        <span className="absolute inset-0 rounded-full bg-ink-300 transition-colors duration-200 peer-checked:bg-ink-950 peer-focus-visible:ring-2 peer-focus-visible:ring-brand-500" />
+        <span className="pointer-events-none absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white transition-transform duration-200 peer-checked:translate-x-5" />
       </span>
     </label>
   );
@@ -294,30 +268,25 @@ export type Status =
   | "ARCHIVED"
   | "not_published";
 
-const STATUS_STYLES: Record<string, { chip: string; dot: string; pulse?: boolean }> = {
-  OPEN: { chip: "bg-jade-50 text-jade-700 ring-jade-200", dot: "bg-jade-500", pulse: true },
-  ACTIVE: { chip: "bg-jade-50 text-jade-700 ring-jade-200", dot: "bg-jade-500", pulse: true },
-  PENDING: { chip: "bg-ocean-50 text-ocean-700 ring-ocean-200", dot: "bg-ocean-500" },
-  PAUSED: { chip: "bg-gold-50 text-gold-700 ring-gold-200", dot: "bg-gold-500" },
-  DRAFT: { chip: "bg-ink-100 text-ink-600 ring-ink-200", dot: "bg-ink-400" },
-  CLOSED: { chip: "bg-coral-50 text-coral-700 ring-coral-200", dot: "bg-coral-500" },
-  ARCHIVED: { chip: "bg-ink-100 text-ink-600 ring-ink-200", dot: "bg-ink-400" },
-  not_published: { chip: "bg-ink-100 text-ink-600 ring-ink-200", dot: "bg-ink-400" },
+/* pale tint with dark ink of the same hue; neutral states are grey */
+const STATUS_STYLES: Record<string, { chip: string; dot: string; label: string }> = {
+  OPEN: { chip: "bg-[#dcfae5] text-[#04250e]", dot: "bg-jade-600", label: "Voting open" },
+  ACTIVE: { chip: "bg-[#dcfae5] text-[#04250e]", dot: "bg-jade-600", label: "Active" },
+  PENDING: { chip: "bg-ink-100 text-ink-800", dot: "bg-ink-500", label: "Up next" },
+  PAUSED: { chip: "bg-[#fffbeb] text-[#92400e]", dot: "bg-gold-500", label: "Paused" },
+  DRAFT: { chip: "bg-ink-100 text-ink-800", dot: "bg-ink-400", label: "Draft" },
+  CLOSED: { chip: "bg-ink-100 text-ink-800", dot: "bg-ink-500", label: "Closed" },
+  ARCHIVED: { chip: "bg-ink-100 text-ink-700", dot: "bg-ink-400", label: "Archived" },
+  not_published: { chip: "bg-ink-100 text-ink-800", dot: "bg-ink-400", label: "Not published" },
 };
 
 export function StatusBadge({ status }: { status: string | null | undefined }) {
   const key = status ?? "DRAFT";
   const s = STATUS_STYLES[key] ?? STATUS_STYLES.DRAFT;
-  const label = key.replace(/_/g, " ");
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.1em] ring-1 ring-inset ${s.chip}`}
-    >
-      <span
-        aria-hidden="true"
-        className={`h-1.5 w-1.5 rounded-full ${s.dot} ${s.pulse ? "animate-pulse-soft" : ""}`}
-      />
-      {label}
+    <span className={`inline-flex h-6 flex-none items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-xs font-medium ${s.chip}`}>
+      <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
+      {s.label}
     </span>
   );
 }
@@ -341,65 +310,46 @@ export function ProgressBar({
       className={`h-2 w-full overflow-hidden rounded-full bg-ink-100 ${className}`}
     >
       <div
-        className={`h-full rounded-full transition-[width] duration-700 ease-out ${
-          tone === "jade"
-            ? "bg-gradient-to-r from-jade-500 to-jade-300"
-            : "bg-gradient-to-r from-brand-500 to-brand-300"
-        }`}
+        className={`h-full rounded-full transition-[width] duration-500 ease-out ${tone === "jade" ? "bg-jade-600" : "bg-brand-500"}`}
         style={{ width: `${pct}%` }}
       />
     </div>
   );
 }
 
-const TONE_STYLES = {
-  brand: "bg-brand-50 text-brand-600 ring-brand-100",
-  jade: "bg-jade-50 text-jade-600 ring-jade-100",
-  gold: "bg-gold-50 text-gold-600 ring-gold-100",
-  ocean: "bg-ocean-50 text-ocean-600 ring-ocean-100",
-  coral: "bg-coral-50 text-coral-600 ring-coral-100",
-  ink: "bg-ink-100 text-ink-600 ring-ink-200",
-} as const;
-
+/** A figure as type: grey label over a regular-weight value, an optional caption naming its baseline. */
 export function StatCard({
   label,
   value,
   hint,
-  icon,
-  tone = "brand",
 }: {
   label: string;
   value: ReactNode;
   hint?: ReactNode;
-  icon?: ReactNode;
-  tone?: keyof typeof TONE_STYLES;
 }) {
   return (
-    <Card className="group overflow-hidden p-5 transition-shadow duration-300 hover:shadow-lift sm:p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-ink-400">{label}</p>
-          <div className="mt-2 font-display text-[2rem] font-semibold leading-none tracking-tight text-ink-950">
-            {value}
-          </div>
-          {hint && <p className="mt-2 text-xs text-ink-500">{hint}</p>}
-        </div>
-        {icon && (
-          <span
-            className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl ring-1 transition-transform duration-300 group-hover:scale-105 ${TONE_STYLES[tone]}`}
-          >
-            {icon}
-          </span>
-        )}
-      </div>
-    </Card>
+    <div className="min-w-0 px-5 py-4">
+      <p className="text-sm text-ink-500">{label}</p>
+      <div className="num mt-1 text-[28px] font-normal leading-none text-ink-950">{value}</div>
+      {hint && <p className="mt-2 text-xs text-ink-500">{hint}</p>}
+    </div>
+  );
+}
+
+/** KPIs grouped in one container split by 1px dividers, never one tile each. */
+export function StatStrip({ children, columns }: { children: ReactNode; columns: 2 | 3 | 4 }) {
+  const cols = { 2: "sm:grid-cols-2", 3: "sm:grid-cols-3", 4: "sm:grid-cols-2 lg:grid-cols-4" }[columns];
+  return (
+    <div className={`grid grid-cols-2 divide-line overflow-hidden rounded-[10px] border border-line bg-white max-sm:[&>*:nth-child(odd)]:border-r max-sm:[&>*:nth-child(n+3)]:border-t sm:divide-x ${cols}`}>
+      {children}
+    </div>
   );
 }
 
 /* ------------------------------- feedback ------------------------------- */
 
 export function Skeleton({ className = "h-4 w-full" }: { className?: string }) {
-  return <div aria-hidden="true" className={`skeleton rounded-xl ${className}`} />;
+  return <div aria-hidden="true" className={`skeleton rounded-lg ${className}`} />;
 }
 
 export function EmptyState({
@@ -414,11 +364,9 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-ink-200 bg-white/60 px-6 py-12 text-center">
-      <span className="grid h-12 w-12 place-items-center rounded-2xl bg-brand-50 text-brand-500 ring-1 ring-brand-100">
-        {icon ?? <IconSparkles size={22} />}
-      </span>
-      <p className="mt-4 font-display text-[15px] font-semibold text-ink-800">{title}</p>
+    <div className="flex flex-col items-center justify-center rounded-[10px] border border-dashed border-ink-300 px-6 py-10 text-center">
+      {icon && <span className="text-ink-400">{icon}</span>}
+      <p className={`${icon ? "mt-3" : ""} text-[15px] font-medium text-ink-900`}>{title}</p>
       {hint && <p className="mt-1.5 max-w-sm text-sm leading-relaxed text-ink-500">{hint}</p>}
       {action && <div className="mt-4">{action}</div>}
     </div>
@@ -429,9 +377,9 @@ export function ErrorBox({ children }: { children: ReactNode }) {
   return (
     <div
       role="alert"
-      className="flex items-start gap-2 rounded-xl border border-coral-200 bg-coral-50 px-3.5 py-2.5 text-sm text-coral-800"
+      className="flex items-start gap-2 rounded-lg bg-[#ffedea] px-3.5 py-2.5 text-sm text-[#831c1e]"
     >
-      <IconAlert size={16} className="mt-0.5 shrink-0 text-coral-500" />
+      <IconAlert size={16} className="mt-0.5 shrink-0 text-coral-700" />
       <span className="leading-relaxed">{children}</span>
     </div>
   );
@@ -439,8 +387,8 @@ export function ErrorBox({ children }: { children: ReactNode }) {
 
 export function InfoBox({ children }: { children: ReactNode }) {
   return (
-    <div className="flex items-start gap-2 rounded-xl border border-ocean-200 bg-ocean-50 px-3.5 py-2.5 text-sm text-ocean-900">
-      <IconInfo size={16} className="mt-0.5 shrink-0 text-ocean-500" />
+    <div className="flex items-start gap-2 rounded-lg bg-ink-50 px-3.5 py-2.5 text-sm text-ink-800">
+      <IconInfo size={16} className="mt-0.5 shrink-0 text-ink-500" />
       <span className="leading-relaxed">{children}</span>
     </div>
   );
@@ -484,19 +432,10 @@ export function ConfirmDialog({
       onClick={(e) => {
         if (e.target === ref.current) onCancel();
       }}
-      className="m-auto w-[min(30rem,calc(100vw-2rem))] overflow-hidden rounded-3xl border border-line bg-white p-0 shadow-lift"
+      className="m-auto w-[min(30rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-line bg-white p-0 shadow-lift"
     >
-      <div className="p-6 sm:p-7">
-        <span
-          className={`grid h-12 w-12 place-items-center rounded-2xl ring-1 ${
-            danger
-              ? "bg-coral-50 text-coral-600 ring-coral-100"
-              : "bg-brand-50 text-brand-600 ring-brand-100"
-          }`}
-        >
-          <IconAlert size={22} />
-        </span>
-        <h2 id="dlg-title" className="mt-4 font-display text-lg font-semibold text-ink-950">
+      <div className="p-6">
+        <h2 id="dlg-title" className="text-lg font-semibold text-ink-950">
           {title}
         </h2>
         <p className="mt-2 text-sm leading-relaxed text-ink-500">{body}</p>
@@ -515,25 +454,26 @@ export function ConfirmDialog({
 
 /* -------------------------------- tables -------------------------------- */
 
-export function DataTable({ head, children }: { head: string[]; children: ReactNode }) {
+/** `numeric` lists the columns whose header (and cells) are right-aligned figures. */
+export function DataTable({ head, numeric = [], children }: { head: string[]; numeric?: number[]; children: ReactNode }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-card">
+    <div className="overflow-hidden rounded-[10px] border border-line bg-white">
       <div className="overflow-x-auto scrollbar-slim">
         <table className="w-full min-w-[620px] text-left text-sm">
           <thead>
-            <tr className="border-b border-line bg-ink-50/80">
+            <tr className="border-b border-line">
               {head.map((h, i) => (
                 <th
                   key={`${h}-${i}`}
                   scope="col"
-                  className="whitespace-nowrap px-4 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-500"
+                  className={`h-10 whitespace-nowrap px-4 text-xs font-normal text-ink-500 ${numeric.includes(i) ? "text-right" : ""}`}
                 >
                   {h}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="[&>tr]:transition-colors [&>tr:hover]:bg-brand-50/40">{children}</tbody>
+          <tbody className="[&>tr]:border-b [&>tr]:border-rule [&>tr:last-child]:border-0">{children}</tbody>
         </table>
       </div>
     </div>

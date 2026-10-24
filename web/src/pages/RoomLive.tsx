@@ -18,16 +18,10 @@ import {
 } from "../components/ui";
 import {
   IconCheck,
-  IconCheckCircle,
-  IconClock,
-  IconLock,
   IconPause,
   IconPlay,
   IconStop,
-  IconTeams,
-  IconTrophy,
-  IconUsers,
-} from "../components/icons";
+  } from "../components/icons";
 
 interface Snapshot {
   room: { id: string; name: string; status: string; settings: any; publishedAt: string | null; memberCount: number };
@@ -117,116 +111,85 @@ export default function RoomLive() {
   const currentRound = activeRound ?? lastRound;
   const presentingTeam = snap.teams.find((t) => t.teamId === currentRound?.teamId);
   const canVote = ["PARTICIPANT", "MODERATOR"].includes(snap.membership?.role ?? user!.role) && snap.room.status === "ACTIVE";
-  const roundStatus = currentRound?.status ?? (snap.room.status === "ACTIVE" ? "PENDING" : "CLOSED");
 
-  const roundHint = (() => {
-    if (!currentRound) return "Pick a team in the presenter controls to begin.";
-    if (currentRound.status === "PENDING") return "Voting will open when the moderator starts the round.";
-    if (currentRound.status === "OPEN") return "Voting is open — participants are scoring right now.";
-    if (currentRound.status === "PAUSED") return "Voting is paused. Resume when everyone is ready.";
-    return "Voting is closed for this round.";
-  })();
+  const teamName = presentingTeam?.name;
+  const finding = !currentRound
+    ? isModerator
+      ? "No team is presenting. Pick the first team to start."
+      : "Waiting for the first team to present."
+    : currentRound.status === "PENDING"
+      ? `${teamName} is up next. Voting hasn't opened.`
+      : currentRound.status === "OPEN"
+        ? `${teamName} is presenting. Voting is open.`
+        : currentRound.status === "PAUSED"
+          ? `${teamName} is presenting. Voting is paused.`
+          : `${teamName}'s round is closed.`;
+  const order = presentingTeam ? snap.teams.findIndex((t) => t.teamId === presentingTeam.teamId) + 1 : 0;
+  const refresh = () => qc.invalidateQueries({ queryKey: ["snapshot", roomId] });
 
   return (
     <>
-      <div className="mb-5 flex flex-wrap items-end justify-between gap-4 sm:mb-6">
+      <div className="mb-5 flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-600">
-            <span className="h-1 w-6 rounded-full bg-gradient-to-r from-brand-500 to-jade-400" aria-hidden="true" />
-            Live room
-          </p>
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-ink-950 sm:text-[2rem]">
-            {snap.room.name}
-          </h1>
-          <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-500">
-            <span className="inline-flex items-center gap-1.5">
-              <IconUsers size={14} className="text-ink-400" />
-              {snap.room.memberCount} member{snap.room.memberCount === 1 ? "" : "s"}
-            </span>
-            <span aria-hidden="true" className="h-1 w-1 rounded-full bg-ink-300" />
-            <span className="inline-flex items-center gap-1.5">
-              <span className={`h-2 w-2 rounded-full ${connected ? "animate-pulse-soft bg-jade-500" : "bg-gold-500"}`} />
-              {connected ? "Realtime connected" : "Reconnecting…"}
-            </span>
+          <h1 className="text-[22px] font-semibold leading-tight text-ink-950">{snap.room.name}</h1>
+          <p className="mt-1 text-sm text-ink-500">
+            {snap.room.status === "ACTIVE" ? finding : "This room is closed."}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <StatusBadge status={snap.room.status} />
-          <Link to={`/room/${roomId}/results`} className={buttonClass("secondary", "py-2 text-xs")}>
-            Results →
+        <div className="flex shrink-0 items-center gap-2">
+          {snap.room.status !== "ACTIVE" && <StatusBadge status={snap.room.status} />}
+          <Link to={`/room/${roomId}/results`} className={buttonClass("secondary")}>
+            Results
           </Link>
         </div>
       </div>
 
-      {/* currently presenting */}
-      <section className="relative mb-4 overflow-hidden rounded-3xl bg-ink-950 p-6 text-white shadow-lift sm:p-7">
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-          <div className={`absolute -right-16 -top-24 h-72 w-72 rounded-full blur-3xl ${
-            roundStatus === "OPEN" ? "bg-jade-500/30" : roundStatus === "PAUSED" ? "bg-gold-500/25" : "bg-brand-600/30"
-          }`} />
-          <div className="absolute -bottom-28 -left-16 h-72 w-72 rounded-full bg-brand-600/20 blur-3xl" />
-          <div
-            className="absolute inset-0 opacity-[0.05]"
-            style={{
-              backgroundImage:
-                "linear-gradient(to right, white 1px, transparent 1px), linear-gradient(to bottom, white 1px, transparent 1px)",
-              backgroundSize: "48px 48px",
-            }}
-          />
+      {/* presenting strip: the object of the screen, with the round's controls beside it */}
+      <section
+        aria-label="Presenting now"
+        className="mb-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 rounded-[10px] border border-line px-5 py-4"
+      >
+        <div className="min-w-0">
+          <p className="text-[13px] text-ink-500">
+            {presentingTeam && order > 0 ? `Presenting, team ${order} of ${snap.teams.length}` : "Presenting"}
+          </p>
+          <p data-testid="presenting-team" className="mt-0.5 truncate text-2xl font-semibold leading-tight text-ink-950">
+            {presentingTeam ? presentingTeam.name : "No team selected"}
+          </p>
         </div>
-        <div className="relative flex flex-wrap items-end justify-between gap-5">
-          <div className="min-w-0">
-            <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">
-              <span className="relative flex h-1.5 w-1.5">
-                {roundStatus === "OPEN" && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-jade-400 opacity-70" />}
-                <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${
-                  roundStatus === "OPEN" ? "bg-jade-400" : roundStatus === "PAUSED" ? "bg-gold-400" : "bg-white/40"
-                }`} />
-              </span>
-              Currently presenting
-            </p>
-            <p data-testid="presenting-team" className="mt-2 font-display text-3xl font-semibold tracking-tight sm:text-4xl">
-              {presentingTeam ? presentingTeam.name : "— none selected —"}
-            </p>
-            <p className="mt-2.5 max-w-lg text-[13px] leading-relaxed text-white/45">{roundHint}</p>
-          </div>
-          <div className="flex flex-col items-start gap-2 sm:items-end">
-            <StatusBadge status={roundStatus} />
-            {presentingTeam && presentingTeam.presentationOrder > 0 && (
-              <span className="text-[11px] text-white/35">
-                Presentation #{presentingTeam.presentationOrder}
-              </span>
-            )}
-          </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {currentRound && <StatusBadge status={currentRound.status} />}
+          {isModerator && currentRound && <RoundActions round={currentRound} onDone={refresh} />}
         </div>
       </section>
 
-      {isModerator && <PresenterControls snap={snap} currentRound={currentRound} onRefresh={() => qc.invalidateQueries({ queryKey: ["snapshot", roomId] })} />}
-
-      {canVote && (
-        <VotingPanel
-          roomId={roomId!}
-          snap={snap}
-          round={currentRound}
-          myTeamId={snap.membership?.teamId ?? null}
-          isModerator={isModerator}
-        />
-      )}
-
-      {isModerator && (
-        <div className="mt-5">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="font-display text-lg font-semibold tracking-tight text-ink-900">Voting progress</h2>
-            <span className="text-xs text-ink-500">{presentingTeam?.name ?? "No team presenting"}</span>
+      {isModerator ? (
+        <>
+          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+            <section aria-labelledby="turnout-heading" className="min-w-0">
+              {currentRound && currentRound.status !== "PENDING" ? (
+                <Turnout roomId={roomId!} roundId={currentRound.id} teamName={teamName ?? ""} connected={connected} />
+              ) : (
+                <>
+                  <h2 id="turnout-heading" className="mb-2 text-base font-semibold text-ink-950">Turnout</h2>
+                  <p className="rounded-[10px] border border-dashed border-ink-300 px-4 py-3 text-sm text-ink-700">
+                    {currentRound ? `Open voting for ${teamName} to see who has voted.` : "Turnout appears once a team is presenting."}
+                  </p>
+                </>
+              )}
+            </section>
+            <PresenterControls snap={snap} currentRound={currentRound} onRefresh={refresh} />
           </div>
-          {currentRound ? (
-            <Progress roomId={roomId!} roundId={currentRound.id} connected={connected} />
-          ) : (
-            <Card>
-              <p className="text-sm text-ink-500">Progress appears once a team starts presenting.</p>
-            </Card>
+          {canVote && (
+            <section aria-label="Your score" className="mt-8">
+              <VotingPanel roomId={roomId!} snap={snap} round={currentRound} myTeamId={snap.membership?.teamId ?? null} isModerator />
+            </section>
           )}
-        </div>
+        </>
+      ) : (
+        canVote && (
+          <VotingPanel roomId={roomId!} snap={snap} round={currentRound} myTeamId={snap.membership?.teamId ?? null} isModerator={false} />
+        )
       )}
     </>
   );
@@ -234,137 +197,155 @@ export default function RoomLive() {
 
 /* ============================ presenter controls ============================ */
 
-function PresenterControls({ snap, currentRound, onRefresh }: { snap: Snapshot; currentRound: Snapshot["rounds"][number] | undefined; onRefresh: () => void }) {
+/** Open / pause / resume / close: next to the team they act on. */
+function RoundActions({ round, onDone }: { round: Snapshot["rounds"][number]; onDone: () => void }) {
   const qc = useQueryClient();
+  const toast = useToast();
+  const act = useMutation({
+    mutationFn: (path: string) => api(path, { body: {} }),
+    onSuccess: () => {
+      onDone();
+      qc.invalidateQueries({ queryKey: ["progress"] });
+    },
+    onError: (e) => toast(e instanceof ApiError ? e.message : "Action failed", "error"),
+  });
+  const go = (verb: string) => act.mutate(`/rounds/${round.id}/${verb}`);
+  const busy = act.isPending;
+  if (round.status === "PENDING")
+    return (
+      <Button data-testid="open-voting" disabled={busy} onClick={() => go("open")}>
+        <IconPlay size={14} />
+        Open voting
+      </Button>
+    );
+  if (round.status === "OPEN")
+    return (
+      <>
+        <Button variant="secondary" data-testid="pause-voting" disabled={busy} onClick={() => go("pause")}>
+          <IconPause size={14} />
+          Pause
+        </Button>
+        <Button variant="danger" data-testid="close-voting" disabled={busy} onClick={() => go("close")}>
+          <IconStop size={14} />
+          Close round
+        </Button>
+      </>
+    );
+  if (round.status === "PAUSED")
+    return (
+      <>
+        <Button data-testid="resume-voting" disabled={busy} onClick={() => go("resume")}>
+          <IconPlay size={14} />
+          Resume
+        </Button>
+        <Button variant="danger" disabled={busy} onClick={() => go("close")}>
+          <IconStop size={14} />
+          Close round
+        </Button>
+      </>
+    );
+  return null;
+}
+
+/** Who presents next, and the run order so far. */
+function PresenterControls({ snap, currentRound, onRefresh }: { snap: Snapshot; currentRound: Snapshot["rounds"][number] | undefined; onRefresh: () => void }) {
   const toast = useToast();
   const [teamId, setTeamId] = useState("");
   const [forceOpen, setForceOpen] = useState(false);
   const [confirmForce, setConfirmForce] = useState<string | null>(null);
 
   const act = useMutation({
-    mutationFn: ({ path, body }: { path: string; body?: unknown }) => api(path, { body: body ?? {} }),
-    onSuccess: (_r, v) => {
+    mutationFn: ({ id, force }: { id: string; force: boolean }) =>
+      api(`/rooms/${snap.room.id}/rounds/select`, { body: { teamId: id, force } }),
+    onSuccess: () => {
       onRefresh();
-      qc.invalidateQueries({ queryKey: ["progress"] });
-      if (v.path.includes("rounds/")) toast("Round updated", "success");
+      setTeamId("");
+      setForceOpen(false);
     },
     onError: (e) => toast(e instanceof ApiError ? e.message : "Action failed", "error"),
   });
+  const select = (id: string, force = false) => act.mutate({ id, force });
 
-  const closedTeams = new Set(snap.rounds.filter((r) => r.status === "CLOSED").map((r) => r.teamId));
-
-  const select = (id: string, force = false) =>
-    act.mutate({ path: `/rooms/${snap.room.id}/rounds/select`, body: { teamId: id, force } }, {
-      onSuccess: () => {
-        setTeamId("");
-        setForceOpen(false);
-      },
-    });
+  // a team counts as presented once its round actually opened
+  const presented = new Set(snap.rounds.filter((r) => r.status === "CLOSED" && r.openedAt).map((r) => r.teamId));
+  const locked = currentRound?.status === "OPEN";
 
   return (
-    <Card className="mb-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 ring-1 ring-inset ring-brand-100">
-            <IconPlay size={18} />
-          </span>
-          <div>
-            <h2 className="font-display text-base font-semibold text-ink-900">Presenter controls</h2>
-            <p className="mt-0.5 text-xs text-ink-500">Choose who presents next, then run the round.</p>
-          </div>
-        </div>
-        {currentRound && <StatusBadge status={currentRound.status} />}
-      </div>
-
-      <div className="mt-4 grid gap-3 rounded-2xl border border-line bg-ink-50/40 p-3.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-        <LabelledSelect label="Select presenting team" value={teamId} onChange={(e) => setTeamId(e.target.value)}>
-          <option value="">Select team…</option>
-          {snap.teams.map((team, index) => (
-            <option key={team.teamId} value={team.teamId}>
-              {index + 1}. {team.name}{closedTeams.has(team.teamId) ? " (evaluated)" : ""}
-            </option>
-          ))}
-        </LabelledSelect>
-        <div className="flex flex-wrap items-center gap-2">
-          <CheckForce onChecked={(v) => setForceOpen(v)} label="Re-open completed team (audited)" checked={forceOpen} />
+    <aside aria-labelledby="next-heading" className="space-y-6">
+      <section>
+        <h2 id="next-heading" className="mb-2 text-base font-semibold text-ink-950">
+          Next team
+        </h2>
+        <div className="space-y-3 rounded-[10px] border border-line p-4">
+          <LabelledSelect label="Select presenting team" value={teamId} onChange={(e) => setTeamId(e.target.value)} disabled={locked}>
+            <option value="">Choose a team</option>
+            {snap.teams.map((team, index) => (
+              <option key={team.teamId} value={team.teamId}>
+                {index + 1}. {team.name}{presented.has(team.teamId) ? " (presented)" : ""}
+              </option>
+            ))}
+          </LabelledSelect>
+          <CheckForce onChecked={(v) => setForceOpen(v)} label="Let a presented team go again (audited)" checked={forceOpen} />
           <Button
-            className="py-2 text-xs"
-            disabled={!teamId}
+            className="w-full"
+            variant="secondary"
+            disabled={!teamId || locked || act.isPending}
             onClick={() => {
-              if (closedTeams.has(teamId) && !forceOpen) return setConfirmForce(teamId);
+              if (presented.has(teamId) && !forceOpen) return setConfirmForce(teamId);
               select(teamId, forceOpen);
             }}
           >
             Present this team
           </Button>
+          {locked && <p className="text-xs text-ink-500">Close or pause the open round before switching teams.</p>}
         </div>
-      </div>
+      </section>
 
-      {currentRound && (
-        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3.5">
-          <span className="mr-1 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-400">Round</span>
-          {currentRound.status === "PENDING" && (
-            <Button variant="success" className="py-2 text-xs" data-testid="open-voting" onClick={() => act.mutate({ path: `/rounds/${currentRound.id}/open` })}>
-              <IconPlay size={13} />
-              Open voting
-            </Button>
-          )}
-          {currentRound.status === "OPEN" && (
-            <>
-              <Button variant="secondary" className="py-2 text-xs" data-testid="pause-voting" onClick={() => act.mutate({ path: `/rounds/${currentRound.id}/pause` })}>
-                <IconPause size={13} />
-                Pause
-              </Button>
-              <Button variant="danger" className="py-2 text-xs" data-testid="close-voting" onClick={() => act.mutate({ path: `/rounds/${currentRound.id}/close` })}>
-                <IconStop size={13} />
-                Close round
-              </Button>
-            </>
-          )}
-          {currentRound.status === "PAUSED" && (
-            <>
-              <Button variant="success" className="py-2 text-xs" data-testid="resume-voting" onClick={() => act.mutate({ path: `/rounds/${currentRound.id}/resume` })}>
-                <IconPlay size={13} />
-                Resume
-              </Button>
-              <Button variant="danger" className="py-2 text-xs" onClick={() => act.mutate({ path: `/rounds/${currentRound.id}/close` })}>
-                <IconStop size={13} />
-                Close round
-              </Button>
-            </>
-          )}
-          {currentRound.status === "CLOSED" && (
-            <span className="inline-flex items-center gap-1.5 text-xs text-ink-500">
-              <IconCheckCircle size={14} className="text-jade-500" />
-              This round is complete.
-            </span>
-          )}
-        </div>
-      )}
+      <section aria-labelledby="order-heading">
+        <h2 id="order-heading" className="mb-2 text-base font-semibold text-ink-950">
+          Run order
+        </h2>
+        <ol className="rounded-[10px] border border-line">
+          {snap.teams.map((team, index) => {
+            const now = currentRound?.teamId === team.teamId && currentRound.status !== "CLOSED";
+            return (
+              <li key={team.teamId} className="flex h-11 items-center justify-between gap-3 border-b border-rule px-4 text-sm last:border-0">
+                <span className="flex min-w-0 items-center gap-3">
+                  <span className="num w-4 shrink-0 text-right text-ink-500">{index + 1}</span>
+                  <span className={`truncate ${now ? "font-medium text-ink-950" : "text-ink-800"}`}>{team.name}</span>
+                </span>
+                <span className="shrink-0 text-xs text-ink-500">
+                  {now ? "Now" : presented.has(team.teamId) ? "Presented" : "Waiting"}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+      </section>
 
       <ConfirmDialog
         open={!!confirmForce}
-        title="Re-open evaluated team?"
-        body="This team already completed its voting round. Re-opening it starts a new presentation round (recorded in the audit log)."
-        confirmLabel="Re-open"
+        title="Let this team present again?"
+        body="This team's round already closed. Presenting it again starts a new voting round, recorded in the audit log."
+        confirmLabel="Present again"
         onCancel={() => setConfirmForce(null)}
         onConfirm={() => {
           if (confirmForce) select(confirmForce, true);
           setConfirmForce(null);
         }}
       />
-    </Card>
+    </aside>
   );
 }
 
 function CheckForce({ label, checked, onChecked }: { label: string; checked: boolean; onChecked: (v: boolean) => void }) {
   return (
-    <label className="flex cursor-pointer items-center gap-2 text-[11px] text-ink-600">
+    <label className="flex cursor-pointer items-center gap-2 text-[13px] text-ink-700">
       <input
         type="checkbox"
         checked={checked}
         onChange={(e) => onChecked(e.target.checked)}
-        className="h-3.5 w-3.5 rounded border-ink-300 accent-brand-600"
+        className="h-4 w-4 rounded border-ink-400 accent-ink-950"
         aria-label={label}
       />
       {label}
@@ -437,12 +418,9 @@ function VotingPanel({ roomId, snap, round, myTeamId, isModerator }: { roomId: s
   if (!round || round.status === "PENDING") {
     return (
       <Card>
-        <div data-testid="waiting-presenting" className="flex items-start gap-4">
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-ocean-50 text-ocean-600 ring-1 ring-inset ring-ocean-100">
-            <IconClock size={20} />
-          </span>
+        <div data-testid="waiting-presenting">
           <div>
-            <h2 className="font-display text-base font-semibold text-ink-900">Waiting for the moderator</h2>
+            <h2 className="text-base font-semibold text-ink-950">Waiting for the moderator</h2>
             <p className="mt-1 text-sm leading-relaxed text-ink-500">
               {round
                 ? "A team has been selected. Voting opens when the moderator starts the round."
@@ -459,19 +437,16 @@ function VotingPanel({ roomId, snap, round, myTeamId, isModerator }: { roomId: s
     return (
       <Card>
         <div data-testid="voting-closed" className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex items-start gap-4">
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-ink-100 text-ink-500 ring-1 ring-inset ring-ink-200">
-              <IconLock size={20} />
-            </span>
+          <div>
             <div>
-              <h2 className="font-display text-base font-semibold text-ink-900">Voting is closed</h2>
+              <h2 className="text-base font-semibold text-ink-950">Voting is closed</h2>
               <p className="mt-1 text-sm leading-relaxed text-ink-500">
                 This round is complete. Wait for the results to be published.
               </p>
             </div>
           </div>
-          <Link to={`/room/${roomId}/results`} className={buttonClass("secondary", "py-2 text-xs")}>
-            View results →
+          <Link to={`/room/${roomId}/results`} className={buttonClass("secondary")}>
+            View results
           </Link>
         </div>
       </Card>
@@ -484,15 +459,12 @@ function VotingPanel({ roomId, snap, round, myTeamId, isModerator }: { roomId: s
   if (isSelfTeam) {
     return (
       <Card>
-        <div data-testid="self-team" className="flex items-start gap-4">
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-brand-50 text-brand-600 ring-1 ring-inset ring-brand-100">
-            <IconUsers size={20} />
-          </span>
+        <div data-testid="self-team">
           <div>
-            <h2 className="font-display text-base font-semibold text-ink-900">Your team is presenting</h2>
+            <h2 className="text-base font-semibold text-ink-950">Your team is presenting</h2>
             <p className="mt-1 text-sm leading-relaxed text-ink-500">
-              <strong className="text-ink-800">{myTeamName}</strong> is currently presenting — you
-              will be a voter in the next rounds.
+              <strong className="font-medium text-ink-900">{myTeamName}</strong> is presenting now. You vote in
+              the other teams' rounds.
             </p>
           </div>
         </div>
@@ -502,14 +474,11 @@ function VotingPanel({ roomId, snap, round, myTeamId, isModerator }: { roomId: s
 
   if (round.status === "PAUSED") {
     return (
-      <Card className="border-gold-200 bg-gold-50/60">
-        <div data-testid="voting-paused" className="flex items-start gap-4">
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gold-100 text-gold-700 ring-1 ring-inset ring-gold-200">
-            <IconPause size={20} />
-          </span>
+      <Card className="border-[#fde68a] bg-[#fffbeb]">
+        <div data-testid="voting-paused">
           <div>
-            <h2 className="font-display text-base font-semibold text-gold-900">Voting is paused</h2>
-            <p className="mt-1 text-sm text-gold-800">The moderator paused this round. It will resume shortly.</p>
+            <h2 className="text-base font-semibold text-[#92400e]">Voting is paused</h2>
+            <p className="mt-1 text-sm text-[#92400e]">The moderator paused this round. Your scores so far are kept.</p>
           </div>
         </div>
       </Card>
@@ -522,20 +491,13 @@ function VotingPanel({ roomId, snap, round, myTeamId, isModerator }: { roomId: s
 
   return (
     <Card>
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line pb-4">
-        <div className="flex items-start gap-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 ring-1 ring-inset ring-brand-100">
-            <IconTrophy size={19} />
-          </span>
-          <div>
-            <h2 className="font-display text-lg font-semibold text-ink-900">Score {teamName}</h2>
-            <p className="mt-0.5 text-xs text-ink-500">
-              Move the slider or tap a score for each category.
-            </p>
-          </div>
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-rule pb-4">
+        <div>
+          <h2 className="text-base font-semibold text-ink-950">Score {teamName}</h2>
+          <p className="mt-0.5 text-sm text-ink-500">Tap a score, or drag the slider, for each category.</p>
         </div>
         {submitted && (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-jade-50 px-2.5 py-1 text-[10px] font-semibold text-jade-700 ring-1 ring-inset ring-jade-200">
+          <span className="inline-flex h-6 flex-none items-center gap-1.5 whitespace-nowrap rounded-full bg-[#dcfae5] px-2.5 text-xs font-medium text-[#04250e]">
             <IconCheck size={11} strokeWidth={3} />
             Vote saved{savedVote && savedVote.revision > 1 ? ` · edited ${savedVote.revision - 1}×` : ""}
           </span>
@@ -544,17 +506,17 @@ function VotingPanel({ roomId, snap, round, myTeamId, isModerator }: { roomId: s
 
       {review ? (
         <div className="animate-fade-in pt-4">
-          <h3 className="font-display text-base font-semibold text-ink-900">Review your scores</h3>
-          <p className="mt-1 text-xs text-ink-500">
+          <h3 className="text-base font-semibold text-ink-950">Review your scores</h3>
+          <p className="mt-1 text-sm text-ink-500">
             Editing later is {snap.room.settings.allowVoteEdit ? "possible while voting stays open" : "not possible"}.
           </p>
-          <ul className="mt-4 overflow-hidden rounded-2xl border border-line">
+          <ul className="mt-4 overflow-hidden rounded-[10px] border border-line">
             {snap.categories.map((category) => (
-              <li key={category.id} className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 text-sm last:border-b-0">
-                <span className="text-ink-600">{category.name}</span>
-                <span className="inline-flex items-baseline gap-1">
-                  <strong className="font-display text-lg text-ink-950">{scores[category.id]}</strong>
-                  <span className="text-[10px] text-ink-400">/ {category.maxScore}</span>
+              <li key={category.id} className="flex h-12 items-center justify-between gap-3 border-b border-rule px-4 text-sm last:border-b-0">
+                <span className="text-ink-800">{category.name}</span>
+                <span className="num inline-flex items-baseline gap-1">
+                  <strong className="text-lg font-medium text-ink-950">{scores[category.id]}</strong>
+                  <span className="text-xs text-ink-500">/{category.maxScore}</span>
                 </span>
               </li>
             ))}
@@ -573,7 +535,7 @@ function VotingPanel({ roomId, snap, round, myTeamId, isModerator }: { roomId: s
               {queuedOffline ? "Waiting for connection…" : retrying ? "Reconnecting…" : submit.isPending ? "Submitting…" : "Confirm & submit"}
             </Button>
             {(queuedOffline || retrying) && (
-              <span role="status" className="self-center text-[11px] text-gold-800">
+              <span role="status" className="self-center text-[13px] text-[#92400e]">
                 {queuedOffline
                   ? "You're offline. Your vote is queued and sends as soon as you reconnect. Keep this screen open."
                   : `Connection lost. Retrying automatically, attempt ${submit.failureCount} of 4. Keep this screen open.`}
@@ -585,19 +547,17 @@ function VotingPanel({ roomId, snap, round, myTeamId, isModerator }: { roomId: s
         <div className="pt-4">
           <div className="grid gap-3 lg:grid-cols-2">
             {snap.categories.map((category) => (
-              <div key={category.id} className="rounded-2xl border border-line bg-white p-4">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-semibold text-ink-800">
-                      {category.name}
-                      {!category.isRequired && <span className="ml-1.5 text-[10px] font-medium text-ink-400">(optional)</span>}
-                    </p>
-                    {category.description && <p className="mt-0.5 text-xs leading-relaxed text-ink-500">{category.description}</p>}
-                  </div>
-                  <span className="rounded-md bg-ink-50 px-1.5 py-0.5 font-mono text-[10px] text-ink-500 ring-1 ring-inset ring-line">
-                    {category.minScore}–{category.maxScore}
+              <div key={category.id} className="rounded-[10px] border border-line p-4">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <p className="text-sm font-medium text-ink-950">
+                    {category.name}
+                    {!category.isRequired && <span className="ml-1.5 text-xs font-normal text-ink-500">optional</span>}
+                  </p>
+                  <span className="num text-xs text-ink-500">
+                    {category.minScore} to {category.maxScore}
                   </span>
                 </div>
+                {category.description && <p className="mt-0.5 text-[13px] leading-relaxed text-ink-500">{category.description}</p>}
                 <div className="mt-3">
                   <SliderInput
                     min={category.minScore}
@@ -616,9 +576,9 @@ function VotingPanel({ roomId, snap, round, myTeamId, isModerator }: { roomId: s
             <Button data-testid="review-vote" disabled={!allAnswered} onClick={() => setReview(true)} className="w-full sm:w-auto">
               {allAnswered ? "Review & submit" : "Score all required categories"}
             </Button>
-            {!allAnswered && <span className="text-[11px] text-ink-400">Fill every required category to continue.</span>}
+            {!allAnswered && <span className="text-[13px] text-ink-500">Score every required category to continue.</span>}
           </div>
-          {isModerator && <p className="mt-3 text-[11px] text-ink-400">As a moderator you can also vote if you have no team.</p>}
+          {isModerator && <p className="mt-3 text-[13px] text-ink-500">Moderators without a team vote too.</p>}
         </div>
       )}
     </Card>
@@ -670,23 +630,23 @@ function SliderInput({ min, max, step, value, onChange, label }: { min: number; 
           data-testid={`slider-${label}`}
         />
         <output
-          className="grid h-11 w-14 shrink-0 place-items-center rounded-xl border border-line bg-ink-50/70 font-display text-lg font-semibold text-ink-900"
+          className="num grid h-11 w-14 shrink-0 place-items-center rounded-lg border border-line text-lg font-medium text-ink-950"
           aria-live="polite"
         >
           {value ?? "—"}
         </output>
       </div>
       {values.length <= 12 && (
-        <div className="mt-2.5 flex flex-wrap gap-1" role="group" aria-label={`Quick scores for ${label}`}>
+        <div className="mt-3 flex flex-wrap gap-1.5" role="group" aria-label={`Quick scores for ${label}`}>
           {values.map((option) => (
             <button
               key={option}
               type="button"
               onClick={() => onChange(option)}
-              className={`h-8 min-w-8 rounded-lg border px-1.5 text-xs font-semibold transition-all ${
+              className={`num h-11 min-w-11 rounded-lg border px-2 text-sm font-medium transition-colors sm:h-9 sm:min-w-9 ${
                 value === option
-                  ? "border-brand-600 bg-brand-600 text-white shadow-glow"
-                  : "border-line bg-white text-ink-600 hover:border-brand-300 hover:bg-brand-50"
+                  ? "border-brand-500 bg-brand-500 text-white"
+                  : "border-control bg-white text-ink-800 hover:border-ink-400 hover:bg-ink-50"
               }`}
               aria-pressed={value === option}
             >
@@ -699,77 +659,130 @@ function SliderInput({ min, max, step, value, onChange, label }: { min: number; 
   );
 }
 
-/* ============================== progress panel ============================= */
+/* ================================= turnout ================================= */
 
-function Progress({ roomId, roundId, connected }: { roomId: string; roundId: string; connected: boolean }) {
+/**
+ * The room as dots: one mark per eligible voter, filled in the brand hue once
+ * they've voted. Answers the moderator's question ("who has voted, can I
+ * close?") with the room's own people, and lists who is still scoring.
+ */
+function Turnout({ roomId, roundId, teamName, connected }: { roomId: string; roundId: string; teamName: string; connected: boolean }) {
   const progressQ = useQuery({
     queryKey: ["progress", roomId, roundId],
     queryFn: () => api<any>(`/rooms/${roomId}/rounds/${roundId}/progress`),
     refetchInterval: connected ? 30_000 : 5_000, // vote:submitted drives updates; poll is the fallback
     refetchIntervalInBackground: true,
   });
-  if (progressQ.isLoading) return <Skeleton className="h-32 rounded-2xl" />;
+
+  const heading = (
+    <h2 id="turnout-heading" className="text-base font-semibold text-ink-950">
+      Turnout
+    </h2>
+  );
+  if (progressQ.isLoading)
+    return (
+      <div>
+        <div className="mb-2">{heading}</div>
+        <div className="rounded-[10px] border border-line p-5">
+          <Skeleton className="h-7 w-32" />
+          <Skeleton className="mt-4 h-2 w-full" />
+          <Skeleton className="mt-5 h-24 w-full" />
+        </div>
+      </div>
+    );
+  if (progressQ.isError || !progressQ.data)
+    return (
+      <div>
+        <div className="mb-2">{heading}</div>
+        <p className="rounded-[10px] border border-line px-4 py-3 text-sm text-ink-700">
+          Couldn't load turnout.{" "}
+          <button type="button" className="font-medium underline underline-offset-4" onClick={() => progressQ.refetch()}>
+            Try again
+          </button>
+        </p>
+      </div>
+    );
+
   const p = progressQ.data;
+  const voters: { userId: string; name: string; username?: string; teamName: string | null; status: string }[] = p.voters;
+  const pending = voters.filter((v) => v.status === "pending");
+  const named = voters.some((v) => v.username);
+  // initials fit up to ~80 people; a bigger room becomes a field of plain dots
+  const size = voters.length <= 40 ? "h-10 w-10 text-xs" : voters.length <= 80 ? "h-8 w-8 text-[11px]" : "h-3.5 w-3.5";
+  const big = voters.length <= 80;
+  const excluded = p.excludedMembers?.length ?? 0;
 
   return (
-    <Card data-testid="progress-panel">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-ink-400">Turnout</p>
-          <p className="mt-1 flex items-baseline gap-1.5">
-            <span data-testid="progress-count" className="font-display text-4xl font-semibold text-ink-950">
-              {p.votedCount}
-            </span>
-            <span className="text-sm text-ink-500">/ {p.eligibleCount} eligible voted</span>
-          </p>
-        </div>
-        <span className="rounded-full bg-brand-50 px-3 py-1.5 font-display text-sm font-semibold text-brand-700 ring-1 ring-inset ring-brand-100">
-          {p.percentage}%
-        </span>
+    <div data-testid="progress-panel">
+      <div className="mb-2 flex items-baseline justify-between gap-3">
+        {heading}
+        {excluded > 0 && (
+          <span className="text-xs text-ink-500">
+            {excluded} on {teamName} can't vote this round
+          </span>
+        )}
       </div>
-      <ProgressBar value={p.percentage} className="mt-4 h-2.5" tone="jade" />
-      <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="rounded-2xl border border-jade-100 bg-jade-50/50 p-4">
-          <p className="flex items-center gap-2 text-xs font-semibold text-jade-800">
-            <IconCheckCircle size={14} />
-            Voted ({p.votedCount})
-          </p>
-          <ul className="mt-2.5 space-y-1.5">
-            {p.voters.filter((voter: any) => voter.status === "voted").map((voter: any) => (
-              <li key={voter.userId} className="flex items-center gap-2 text-xs text-ink-600">
-                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-white text-[9px] font-bold text-jade-700 ring-1 ring-jade-200">
-                  {initials(voter.name)}
-                </span>
-                <span className="truncate">{voter.name}</span>
-                {voter.teamName && <span className="truncate text-[10px] text-ink-400">· {voter.teamName}</span>}
+      <div className="rounded-[10px] border border-line p-5">
+        <p className="flex flex-wrap items-baseline gap-x-2">
+          <span data-testid="progress-count" className="num text-4xl leading-none text-ink-950">
+            {p.votedCount}
+          </span>
+          <span className="num text-base text-ink-600">
+            of {p.eligibleCount} voted, {p.percentage}%
+          </span>
+        </p>
+        <ProgressBar value={p.percentage} className="mt-4" />
+
+        <ul aria-label="Voters" className={`mt-5 flex flex-wrap ${big ? "gap-1.5" : "gap-1"}`}>
+          {voters.map((v) => {
+            const done = v.status === "voted";
+            const label = named ? `${v.name}${v.teamName ? `, ${v.teamName}` : ""}: ${done ? "voted" : "waiting"}` : done ? "Voted" : "Waiting";
+            return (
+              <li
+                key={v.userId}
+                title={label}
+                aria-label={label}
+                className={`grid shrink-0 place-items-center rounded-full font-medium ${size} ${
+                  done ? "bg-brand-500 text-white" : "border border-control bg-white text-ink-600"
+                }`}
+              >
+                {big && named ? initials(v.name) : null}
               </li>
-            ))}
-            {p.votedCount === 0 && <li className="text-xs text-ink-400">No votes yet.</li>}
-          </ul>
-        </div>
-        <div className="rounded-2xl border border-line bg-ink-50/50 p-4">
-          <p className="flex items-center gap-2 text-xs font-semibold text-ink-700">
-            <IconClock size={14} className="text-ink-400" />
-            Pending ({p.pendingCount})
-          </p>
-          <ul className="mt-2.5 space-y-1.5">
-            {p.voters.filter((voter: any) => voter.status === "pending").map((voter: any) => (
-              <li key={voter.userId} className="flex items-center gap-2 text-xs text-ink-600">
-                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-white text-[9px] font-bold text-ink-500 ring-1 ring-line">
-                  {initials(voter.name)}
-                </span>
-                <span className="truncate">{voter.name}</span>
-                {voter.teamName && <span className="truncate text-[10px] text-ink-400">· {voter.teamName}</span>}
-              </li>
-            ))}
-            {p.pendingCount === 0 && <li className="text-xs text-ink-400">Everyone has voted.</li>}
-          </ul>
-          <p className="mt-3 flex items-center gap-1.5 border-t border-line pt-2.5 text-[10px] text-ink-400">
-            <IconTeams size={12} />
-            Excluded (presenting team): {p.excludedMembers.length}
-          </p>
+            );
+          })}
+        </ul>
+        <p className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-500">
+          <span className="inline-flex items-center gap-1.5">
+            <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-brand-500" /> Voted
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full border border-control" /> Waiting
+          </span>
+        </p>
+
+        <div className="mt-5 border-t border-rule pt-4">
+          {pending.length === 0 ? (
+            <p className="text-sm text-ink-900">Everyone eligible has voted. You can close the round.</p>
+          ) : named ? (
+            <>
+              <h3 className="text-sm font-medium text-ink-950">
+                Still scoring <span className="num font-normal text-ink-500">{pending.length}</span>
+              </h3>
+              <ul className="mt-1">
+                {pending.slice(0, 6).map((v) => (
+                  <li key={v.userId} className="flex h-10 items-center justify-between gap-3 border-b border-rule text-sm last:border-0">
+                    <span className="truncate text-ink-900">{v.name}</span>
+                    <span className="shrink-0 text-[13px] text-ink-500">{v.teamName ?? "No team"}</span>
+                  </li>
+                ))}
+              </ul>
+              {pending.length > 6 && <p className="mt-2 text-[13px] text-ink-500">and {pending.length - 6} more</p>}
+            </>
+          ) : (
+            <p className="text-sm text-ink-700">{pending.length} still scoring. Names are hidden in this room.</p>
+          )}
         </div>
       </div>
-    </Card>
+    </div>
   );
 }

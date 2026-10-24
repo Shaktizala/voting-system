@@ -16,16 +16,14 @@ import {
   SectionHeading,
   Skeleton,
   StatCard,
+  StatStrip,
 } from "../../components/ui";
 import { useToast } from "../../contexts/Toast";
 import {
-  IconCheckCircle,
   IconCopy,
   IconDownload,
   IconFile,
-  IconKey,
   IconSearch,
-  IconUpload,
   IconUsers,
 } from "../../components/icons";
 
@@ -160,7 +158,7 @@ export default function Participants() {
   return (
     <>
       <PageTitle
-        eyebrow="People"
+
         title="Participants"
         subtitle="Add participants, bulk import from CSV or XLSX, and manage credentials."
         actions={
@@ -171,22 +169,21 @@ export default function Participants() {
         }
       />
 
-      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <StatCard label="Total people" value={listQ.isLoading ? <Skeleton className="h-8 w-10" /> : rows.length} icon={<IconUsers size={19} />} tone="brand" />
-        <StatCard label="Active accounts" value={listQ.isLoading ? <Skeleton className="h-8 w-10" /> : activeCount} icon={<IconCheckCircle size={19} />} tone="jade" />
-        <StatCard label="Teams represented" value={listQ.isLoading ? <Skeleton className="h-8 w-10" /> : teamCount} icon={<IconUsers size={19} />} tone="ocean" />
+      <div className="mb-6">
+          <StatStrip columns={3}>
+        <StatCard label="Total people" value={listQ.isLoading ? <Skeleton className="h-7 w-10" /> : rows.length} />
+        <StatCard label="Active accounts" value={listQ.isLoading ? <Skeleton className="h-7 w-10" /> : activeCount} />
+        <StatCard label="Teams represented" value={listQ.isLoading ? <Skeleton className="h-7 w-10" /> : teamCount} />
+          </StatStrip>
       </div>
 
       <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)]">
         {/* add single participant */}
         <Card className="xl:sticky xl:top-6">
           <div className="flex items-start gap-3">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 ring-1 ring-inset ring-brand-100">
-              <IconUsers size={19} />
-            </span>
             <div>
               <h2 className="font-display text-base font-semibold text-ink-900">Add participant</h2>
-              <p className="mt-0.5 text-xs text-ink-500">A temporary password is issued automatically.</p>
+              <p className="mt-0.5 text-[13px] text-ink-500">A temporary password is issued automatically.</p>
             </div>
           </div>
           <div className="mt-5 space-y-3">
@@ -225,15 +222,12 @@ export default function Participants() {
         <Card>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="flex items-start gap-3">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-ocean-50 text-ocean-600 ring-1 ring-inset ring-ocean-100">
-                <IconUpload size={19} />
-              </span>
               <div>
                 <h2 className="font-display text-base font-semibold text-ink-900">Bulk import</h2>
-                <p className="mt-0.5 text-xs text-ink-500">Preview every row before committing. CSV or XLSX.</p>
+                <p className="mt-0.5 text-[13px] text-ink-500">Preview every row before committing. CSV or XLSX.</p>
               </div>
             </div>
-            <span className="rounded-full bg-ink-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-ink-500">
+            <span className="rounded-full bg-ink-100 px-2.5 py-1 text-[13px] font-medium text-ink-500">
               Up to 5,000 rows
             </span>
           </div>
@@ -264,15 +258,12 @@ export default function Participants() {
               onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
               className="sr-only"
             />
-            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-white text-brand-500 shadow-card ring-1 ring-line transition group-hover:scale-105">
-              <IconUpload size={20} />
-            </span>
             <span className="mt-3 text-sm font-semibold text-ink-800">
               Drop a file here, or <span className="text-brand-600">browse</span>
             </span>
-            <span className="mt-1 text-[11px] text-ink-400">CSV, XLSX or XLS · max 5 MB</span>
+            <span className="mt-1 text-[13px] text-ink-400">CSV, XLSX or XLS · max 5 MB</span>
             {importing && (
-              <span className="mt-3 inline-flex max-w-full items-center gap-1.5 rounded-lg bg-white px-2.5 py-1.5 text-[11px] font-medium text-ink-600 ring-1 ring-line">
+              <span className="mt-3 inline-flex max-w-full items-center gap-1.5 rounded-lg bg-white px-2.5 py-1.5 text-[13px] font-medium text-ink-600 ring-1 ring-line">
                 <IconFile size={13} className="shrink-0 text-brand-500" />
                 <span className="truncate">{importing.name}</span>
               </span>
@@ -287,9 +278,9 @@ export default function Participants() {
             ].map(([step, label]) => (
               <li
                 key={step}
-                className="flex items-center gap-2 rounded-xl border border-line bg-white px-3 py-2 text-[11px] font-medium text-ink-600"
+                className="flex items-center gap-2 rounded-xl border border-line bg-white px-3 py-2 text-[13px] font-medium text-ink-600"
               >
-                <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-ocean-50 text-[10px] font-bold text-ocean-600 ring-1 ring-inset ring-ocean-100">
+                <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-ocean-50 text-[13px] font-medium text-ocean-600 ring-1 ring-inset ring-ocean-100">
                   {step}
                 </span>
                 {label}
@@ -303,7 +294,7 @@ export default function Participants() {
 
           {preview && (
             <div className="mt-4 animate-fade-in">
-              <div className="flex flex-wrap items-center gap-2 text-xs">
+              <div className="flex flex-wrap items-center gap-2 text-[13px]">
                 <span className="rounded-full bg-ink-100 px-2.5 py-1 font-medium text-ink-600">{preview.rowCount} rows</span>
                 <span className="rounded-full bg-jade-50 px-2.5 py-1 font-semibold text-jade-700 ring-1 ring-inset ring-jade-200">{preview.validCount} valid</span>
                 {preview.errorCount > 0 && (
@@ -311,7 +302,7 @@ export default function Participants() {
                 )}
               </div>
               <div className="mt-3 max-h-56 overflow-auto scrollbar-slim rounded-xl border border-line">
-                <table className="w-full text-xs">
+                <table className="w-full text-[13px]">
                   <thead className="sticky top-0 bg-ink-50">
                     <tr>
                       <th scope="col" className="px-3 py-2 text-left font-semibold text-ink-500">Row</th>
@@ -341,10 +332,7 @@ export default function Participants() {
           {(temp || credentials) && (
             <div className="mt-4 animate-fade-in overflow-hidden rounded-2xl border border-gold-200 bg-gold-50/70">
               <div className="flex items-center gap-2 border-b border-gold-200/70 px-4 py-3">
-                <span className="grid h-7 w-7 place-items-center rounded-lg bg-white text-gold-600 ring-1 ring-inset ring-gold-200">
-                  <IconKey size={14} />
-                </span>
-                <p className="text-xs font-bold uppercase tracking-[0.12em] text-gold-800">
+                <p className="text-[13px] font-medium text-gold-800">
                   Temporary password — shown only once
                 </p>
               </div>
@@ -352,7 +340,7 @@ export default function Participants() {
                 {temp && (
                   <div className="flex flex-wrap items-center gap-2">
                     <span>{temp.name} ({temp.username}):</span>
-                    <code className="rounded-md bg-white px-2 py-1 font-mono text-xs font-semibold text-ink-900 ring-1 ring-gold-200">
+                    <code className="rounded-md bg-white px-2 py-1 font-mono text-[13px] font-semibold text-ink-900 ring-1 ring-gold-200">
                       {temp.temporaryPassword}
                     </code>
                     <button
@@ -369,7 +357,7 @@ export default function Participants() {
                   <>
                     <ul className="space-y-1">
                       {credentials.slice(0, 5).map((credential: any) => (
-                        <li key={credential.username} className="flex flex-wrap items-center gap-2 text-xs">
+                        <li key={credential.username} className="flex flex-wrap items-center gap-2 text-[13px]">
                           <span className="font-medium">{credential.username}:</span>
                           <code className="rounded bg-white px-1.5 py-0.5 font-mono text-ink-800 ring-1 ring-gold-200">
                             {credential.temporaryPassword}
@@ -433,43 +421,43 @@ export default function Participants() {
               <tr key={participant.id}>
                 <td className="px-4 py-3.5">
                   <div className="flex items-center gap-2.5">
-                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-brand-100 to-brand-200 text-[10px] font-bold text-brand-700">
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-ink-100 text-[13px] font-medium text-ink-800">
                       {initials(participant.name)}
                     </span>
                     <span className="font-medium text-ink-900">{participant.name}</span>
                   </div>
                 </td>
-                <td className="px-4 py-3.5 font-mono text-xs text-ink-500">@{participant.username}</td>
+                <td className="px-4 py-3.5 text-[13px] text-ink-600">@{participant.username}</td>
                 <td className="px-4 py-3.5 text-ink-600">{participant.email}</td>
                 <td className="px-4 py-3.5">
-                  <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] ring-1 ring-inset ${ROLE_STYLES[participant.role] ?? ROLE_STYLES.PARTICIPANT}`}>
+                  <span className={`inline-flex rounded-full px-2 py-0.5 text-[13px] font-bold   ring-1 ring-inset ${ROLE_STYLES[participant.role] ?? ROLE_STYLES.PARTICIPANT}`}>
                     {participant.role.toLowerCase()}
                   </span>
                 </td>
                 <td className="px-4 py-3.5">
                   {participant.team ? (
-                    <span className="rounded-lg bg-ink-50 px-2 py-1 text-xs font-medium text-ink-600 ring-1 ring-inset ring-line">
+                    <span className="rounded-lg bg-ink-50 px-2 py-1 text-[13px] font-medium text-ink-600 ring-1 ring-inset ring-line">
                       {participant.team.name}
                     </span>
                   ) : (
-                    <span className="text-xs text-ink-400">No team</span>
+                    <span className="text-[13px] text-ink-400">No team</span>
                   )}
                 </td>
                 <td className="px-4 py-3.5">
-                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-ink-600">
+                  <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-ink-600">
                     <span className={`h-1.5 w-1.5 rounded-full ${participant.status === "ACTIVE" ? "bg-jade-500" : "bg-coral-500"}`} />
                     {participant.status.toLowerCase()}
                   </span>
                 </td>
                 <td className="px-4 py-3.5">
                   <div className="flex flex-wrap items-center gap-0.5">
-                    <Button variant="ghost" className="px-2 py-1.5 text-xs" onClick={() => patch.mutate({ id: participant.id, body: { status: participant.status === "ACTIVE" ? "INACTIVE" : "ACTIVE" } })}>
+                    <Button variant="ghost" className="px-2 py-1.5 text-[13px]" onClick={() => patch.mutate({ id: participant.id, body: { status: participant.status === "ACTIVE" ? "INACTIVE" : "ACTIVE" } })}>
                       {participant.status === "ACTIVE" ? "Deactivate" : "Activate"}
                     </Button>
-                    <Button variant="ghost" className="px-2 py-1.5 text-xs" onClick={() => resetPw.mutate(participant.id)}>
+                    <Button variant="ghost" className="px-2 py-1.5 text-[13px]" onClick={() => resetPw.mutate(participant.id)}>
                       Reset password
                     </Button>
-                    <Button variant="dangerGhost" className="px-2 py-1.5 text-xs" onClick={() => setConfirmDelete(participant)}>
+                    <Button variant="dangerGhost" className="px-2 py-1.5 text-[13px]" onClick={() => setConfirmDelete(participant)}>
                       Delete
                     </Button>
                   </div>

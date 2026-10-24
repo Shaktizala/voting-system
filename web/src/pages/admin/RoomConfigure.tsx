@@ -28,7 +28,6 @@ import {
   IconLayers,
   IconLink,
   IconLock,
-  IconPlus,
   IconRefresh,
   IconSearch,
   IconSettings,
@@ -230,13 +229,13 @@ export default function RoomConfigure() {
   return (
     <>
       <PageTitle
-        eyebrow="Room configuration"
+
         title={room.name}
         subtitle={room.description ?? undefined}
         actions={
           <>
             <StatusBadge status={room.status} />
-            <Link to="/admin/rooms" className={buttonClass("secondary", "py-2 text-xs")}>
+            <Link to="/admin/rooms" className={buttonClass("secondary", "py-2 text-[13px]")}>
               All rooms
             </Link>
           </>
@@ -247,38 +246,39 @@ export default function RoomConfigure() {
       <Card className="mb-4 overflow-hidden">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
           <div>
-            <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-ink-400">
+            <p className="flex items-center gap-1.5 text-[13px] font-medium text-ink-400">
               <IconKey size={12} />
               Join code
             </p>
             <div className="mt-2 flex flex-wrap items-end gap-3">
-              <div className="rounded-2xl border border-dashed border-brand-200 bg-brand-50/60 px-5 py-3">
-                <p data-testid="join-code" className="font-mono text-xl font-bold tracking-[0.2em] text-ink-950 sm:text-2xl">
+              <div className="rounded-[10px] border border-dashed border-ink-300 px-5 py-3">
+                {/* taste-skill-ignore: a join code is a key; Plex Mono's one job */}
+                <p data-testid="join-code" className="font-mono text-xl font-medium tracking-[0.2em] text-ink-950 sm:text-2xl">
                   {room.joinCode}
                 </p>
               </div>
-              <Button variant="secondary" className="py-2 text-xs" onClick={() => copyToClipboard(room.joinCode, "Join code copied")}>
+              <Button variant="secondary" className="py-2 text-[13px]" onClick={() => copyToClipboard(room.joinCode, "Join code copied")}>
                 <IconCopy size={14} />
                 Copy code
               </Button>
-              <Button variant="secondary" className="py-2 text-xs" onClick={() => regenerateCode.mutate()}>
+              <Button variant="secondary" className="py-2 text-[13px]" onClick={() => regenerateCode.mutate()}>
                 <IconRefresh size={14} />
                 Regenerate code
               </Button>
-              <Button variant="ghost" className="py-2 text-xs" onClick={() => disableCode.mutate()}>
+              <Button variant="ghost" className="py-2 text-[13px]" onClick={() => disableCode.mutate()}>
                 Disable code
               </Button>
             </div>
 
-            <p className="mt-5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-ink-400">
+            <p className="mt-5 flex items-center gap-1.5 text-[13px] font-medium text-ink-400">
               <IconLink size={12} />
               Invite link
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <p className="min-w-0 max-w-full flex-1 truncate rounded-xl border border-line bg-ink-50/60 px-3.5 py-2.5 font-mono text-[11px] text-ink-600">
+              <p className="min-w-0 max-w-full flex-1 truncate rounded-xl border border-line bg-ink-50/60 px-3.5 py-2.5 font-mono text-[13px] text-ink-600">
                 {joinUrl}
               </p>
-              <Button variant="secondary" className="py-2 text-xs" onClick={() => copyToClipboard(joinUrl, "Invite link copied")}>
+              <Button variant="secondary" className="py-2 text-[13px]" onClick={() => copyToClipboard(joinUrl, "Invite link copied")}>
                 <IconCopy size={14} />
                 Copy link
               </Button>
@@ -286,22 +286,22 @@ export default function RoomConfigure() {
           </div>
 
           <div className="rounded-2xl border border-line bg-ink-50/50 p-4">
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-ink-400">Room actions</p>
+            <p className="text-[13px] font-medium text-ink-400">Room actions</p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               {room.status === "DRAFT" && (
                 <Button disabled={setStatus.isPending} onClick={() => setStatus.mutate("ACTIVE")}>
                   Activate room
                 </Button>
               )}
-              <Link to={`/room/${roomId}`} className={buttonClass("primary", "py-2.5 text-xs")}>
-                Open live dashboard →
+              <Link to={`/room/${roomId}`} className={buttonClass("primary", "py-2.5 text-[13px]")}>
+                Open live room
               </Link>
-              <Link to={`/room/${roomId}/results`} className={buttonClass("secondary", "py-2.5 text-xs")}>
+              <Link to={`/room/${roomId}/results`} className={buttonClass("secondary", "py-2.5 text-[13px]")}>
                 <IconChart size={14} />
                 View results
               </Link>
             </div>
-            <div className="mt-4 flex items-start gap-2 border-t border-line pt-3 text-[11px] leading-relaxed text-ink-500">
+            <div className="mt-4 flex items-start gap-2 border-t border-line pt-3 text-[13px] leading-relaxed text-ink-500">
               <IconLock size={14} className="mt-0.5 shrink-0 text-ink-400" />
               <span>
                 The code controls who can join. Activating the room allows voting to open on the
@@ -316,7 +316,7 @@ export default function RoomConfigure() {
       <div
         role="tablist"
         aria-label="Room configuration sections"
-        className="mb-5 flex gap-1 overflow-x-auto rounded-2xl border border-line bg-white p-1.5 shadow-card scrollbar-slim"
+        className="mb-6 flex gap-6 overflow-x-auto border-b border-line scrollbar-slim"
       >
         {TABS.map((item) => {
           const counts: Partial<Record<Tab, number>> = {
@@ -330,19 +330,16 @@ export default function RoomConfigure() {
               role="tab"
               aria-selected={tab === item.id}
               onClick={() => setTab(item.id)}
-              className={`inline-flex shrink-0 items-center gap-2 rounded-xl px-3.5 py-2.5 text-[13px] font-semibold transition-all duration-200 ${
+              className={`-mb-px inline-flex h-11 shrink-0 items-center gap-2 border-b-2 text-sm transition-colors ${
                 tab === item.id
-                  ? "bg-ink-950 text-white shadow-sm"
-                  : "text-ink-500 hover:bg-ink-50 hover:text-ink-800"
+                  ? "border-ink-950 font-medium text-ink-950"
+                  : "border-transparent text-ink-500 hover:text-ink-900"
               }`}
             >
-              <span className={tab === item.id ? "text-brand-300" : "text-ink-400"}>{item.icon}</span>
               {item.label}
               {counts[item.id] !== undefined && item.id !== "settings" && (
                 <span
-                  className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
-                    tab === item.id ? "bg-white/15 text-white" : "bg-ink-100 text-ink-500"
-                  }`}
+                  className="num text-[13px] text-ink-500"
                 >
                   {counts[item.id]}
                 </span>
@@ -356,12 +353,9 @@ export default function RoomConfigure() {
         <TwoCols>
           <Card>
             <div className="flex items-start gap-3">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 ring-1 ring-inset ring-brand-100">
-                <IconPlus size={19} />
-              </span>
               <div>
                 <h2 className="font-display text-base font-semibold text-ink-900">Add category</h2>
-                <p className="mt-0.5 text-xs text-ink-500">Each category becomes one score on the ballot.</p>
+                <p className="mt-0.5 text-[13px] text-ink-500">Each category becomes one score on the ballot.</p>
               </div>
             </div>
             <div className="mt-5 space-y-3">
@@ -401,7 +395,7 @@ export default function RoomConfigure() {
               description="Voters score each category on this range."
               action={
                 hasVotes ? (
-                  <Button variant="secondary" className="py-2 text-xs" onClick={() => setConfirmNewVersion(true)}>
+                  <Button variant="secondary" className="py-2 text-[13px]" onClick={() => setConfirmNewVersion(true)}>
                     Start new config version
                   </Button>
                 ) : undefined
@@ -410,7 +404,7 @@ export default function RoomConfigure() {
             {categories.length === 0 ? (
               <EmptyState title="No categories" hint="Voters need at least one category." icon={<IconLayers size={22} />} />
             ) : (
-              <DataTable head={["Order", "Name", "Range", "Step", "Weight", "Required", ""]}>
+              <DataTable head={["Order", "Name", "Range", "Step", "Weight", "Required", ""]} numeric={[2, 3, 4]}>
                 {categories.map((category, index) => (
                   <CategoryRow
                     key={category.id}
@@ -432,12 +426,9 @@ export default function RoomConfigure() {
         <TwoCols>
           <Card>
             <div className="flex items-start gap-3">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-jade-50 text-jade-600 ring-1 ring-inset ring-jade-100">
-                <IconTeams size={19} />
-              </span>
               <div>
                 <h2 className="font-display text-base font-semibold text-ink-900">Link a team</h2>
-                <p className="mt-0.5 text-xs text-ink-500">Link teams to this room in presentation order.</p>
+                <p className="mt-0.5 text-[13px] text-ink-500">Link teams to this room in presentation order.</p>
               </div>
             </div>
             <div className="mt-5 space-y-3">
@@ -451,7 +442,7 @@ export default function RoomConfigure() {
                 Add to room
               </Button>
             </div>
-            <div className="mt-4 rounded-xl border border-line bg-ink-50/50 px-3.5 py-3 text-[11px] leading-relaxed text-ink-500">
+            <div className="mt-4 rounded-xl border border-line bg-ink-50/50 px-3.5 py-3 text-[13px] leading-relaxed text-ink-500">
               Presentation order follows the order teams are added. You can unlink a team any time
               before its round starts.
             </div>
@@ -465,14 +456,14 @@ export default function RoomConfigure() {
                 {roomTeams.map((roomTeam, index) => (
                   <tr key={roomTeam.id}>
                     <td className="px-4 py-3.5">
-                      <span className="grid h-7 w-7 place-items-center rounded-lg bg-ink-100 text-[11px] font-bold text-ink-600">
+                      <span className="grid h-7 w-7 place-items-center rounded-lg bg-ink-100 text-[13px] font-bold text-ink-600">
                         {index + 1}
                       </span>
                     </td>
                     <td className="px-4 py-3.5 font-medium text-ink-900">{roomTeam.team.name}</td>
                     <td className="px-4 py-3.5 text-ink-600">{roomTeam.team.projectTitle ?? "—"}</td>
                     <td className="px-4 py-3.5">
-                      <Button variant="dangerGhost" className="px-2 py-1.5 text-xs" onClick={() => removeRoomTeam.mutate(roomTeam.teamId)}>
+                      <Button variant="dangerGhost" className="px-2 py-1.5 text-[13px]" onClick={() => removeRoomTeam.mutate(roomTeam.teamId)}>
                         Unlink
                       </Button>
                     </td>
@@ -488,12 +479,9 @@ export default function RoomConfigure() {
         <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
           <Card>
             <div className="flex items-start gap-3">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-ocean-50 text-ocean-600 ring-1 ring-inset ring-ocean-100">
-                <IconUsers size={19} />
-              </span>
               <div>
                 <h2 className="font-display text-base font-semibold text-ink-900">Assign participants</h2>
-                <p className="mt-0.5 text-xs text-ink-500">Members inherit their org team unless overridden.</p>
+                <p className="mt-0.5 text-[13px] text-ink-500">Members inherit their org team unless overridden.</p>
               </div>
             </div>
             <div className="relative mt-4">
@@ -513,7 +501,7 @@ export default function RoomConfigure() {
                   {Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-12" />)}
                 </div>
               ) : filteredAvailable.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-ink-200 px-3 py-6 text-center text-xs text-ink-400">
+                <p className="rounded-xl border border-dashed border-ink-200 px-3 py-6 text-center text-[13px] text-ink-400">
                   {availableParticipants.length === 0 ? "Everyone available is already assigned." : "No matching participants."}
                 </p>
               ) : (
@@ -521,13 +509,13 @@ export default function RoomConfigure() {
                   <div key={participant.id} className="flex items-center justify-between gap-2 rounded-xl border border-line bg-white p-2.5 text-sm transition-colors hover:border-ink-200">
                     <div className="min-w-0">
                       <p className="truncate text-[13px] font-medium text-ink-800">{participant.name}</p>
-                      <p className="truncate font-mono text-[10px] text-ink-400">@{participant.username}</p>
+                      <p className="truncate text-[13px] text-ink-500">@{participant.username}</p>
                     </div>
                     <div className="flex shrink-0 gap-1">
-                      <Button variant="soft" className="px-2 py-1.5 text-[11px]" onClick={() => addMember(participant.id, "PARTICIPANT", participant.team?.id)}>
+                      <Button variant="soft" className="px-2 py-1.5 text-[13px]" onClick={() => addMember(participant.id, "PARTICIPANT", participant.team?.id)}>
                         Add
                       </Button>
-                      <Button variant="ghost" className="px-2 py-1.5 text-[11px]" onClick={() => addMember(participant.id, "MODERATOR", undefined)}>
+                      <Button variant="ghost" className="px-2 py-1.5 text-[13px]" onClick={() => addMember(participant.id, "MODERATOR", undefined)}>
                         As moderator
                       </Button>
                     </div>
@@ -535,7 +523,7 @@ export default function RoomConfigure() {
                 ))
               )}
             </div>
-            <p className="mt-3 flex items-start gap-1.5 rounded-xl bg-ink-50/60 px-3 py-2 text-[11px] leading-relaxed text-ink-500">
+            <p className="mt-3 flex items-start gap-1.5 rounded-xl bg-ink-50/60 px-3 py-2 text-[13px] leading-relaxed text-ink-500">
               <IconLock size={13} className="mt-0.5 shrink-0 text-ink-400" />
               Self-votes are blocked automatically. Participants without a team can vote for any team.
             </p>
@@ -551,10 +539,10 @@ export default function RoomConfigure() {
                   <tr key={member.userId}>
                     <td className="px-4 py-3.5">
                       <p className="font-medium text-ink-900">{member.user.name}</p>
-                      <p className="font-mono text-[10px] text-ink-400">@{member.user.username}</p>
+                      <p className="text-[13px] text-ink-500">@{member.user.username}</p>
                     </td>
                     <td className="px-4 py-3.5">
-                      <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] ring-1 ring-inset ${
+                      <span className={`inline-flex rounded-full px-2 py-0.5 text-[13px] font-bold   ring-1 ring-inset ${
                         member.role === "MODERATOR"
                           ? "bg-ocean-50 text-ocean-700 ring-ocean-200"
                           : "bg-ink-100 text-ink-600 ring-ink-200"
@@ -575,7 +563,7 @@ export default function RoomConfigure() {
                       </LabelledSelect>
                     </td>
                     <td className="px-4 py-3.5">
-                      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-ink-600">
+                      <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-ink-600">
                         <span className={`h-1.5 w-1.5 rounded-full ${member.user.status === "ACTIVE" ? "bg-jade-500" : "bg-coral-500"}`} />
                         {member.user.status.toLowerCase()}
                       </span>
@@ -592,12 +580,9 @@ export default function RoomConfigure() {
         <div className="grid max-w-3xl grid-cols-1 gap-4">
           <Card>
             <div className="flex items-start gap-3">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-ink-100 text-ink-600 ring-1 ring-inset ring-ink-200">
-                <IconSettings size={19} />
-              </span>
               <div>
                 <h2 className="font-display text-base font-semibold text-ink-900">Room settings</h2>
-                <p className="mt-0.5 text-xs text-ink-500">Changes save immediately and are audited.</p>
+                <p className="mt-0.5 text-[13px] text-ink-500">Changes save immediately and are audited.</p>
               </div>
             </div>
             <div className="mt-5 space-y-3">
@@ -624,7 +609,7 @@ export default function RoomConfigure() {
 
           <Card>
             <h2 className="font-display text-base font-semibold text-ink-900">Scoring</h2>
-            <p className="mt-0.5 text-xs text-ink-500">How votes are aggregated into final scores.</p>
+            <p className="mt-0.5 text-[13px] text-ink-500">How votes are aggregated into final scores.</p>
             <div className="mt-4 space-y-3">
               <NumberSetting
                 label="Minimum votes for a team's score to count (0 = no threshold)"
@@ -727,7 +712,7 @@ function CategoryRow({
       <tr>
         <td className="px-4 py-3.5">
           <div className="flex items-center gap-1">
-            <span className="grid h-6 w-6 place-items-center rounded-md bg-ink-100 text-[10px] font-bold text-ink-500">
+            <span className="grid h-6 w-6 place-items-center rounded-md bg-ink-100 text-[13px] font-medium text-ink-500">
               {index + 1}
             </span>
             <div className="ml-1 flex flex-col">
@@ -736,7 +721,7 @@ function CategoryRow({
                 disabled={orderSaving || index === 0}
                 onClick={() => move(-1)}
                 aria-label={`Move ${c.name} up`}
-                className="rounded px-1 text-[9px] leading-3 text-ink-400 transition hover:text-ink-800 disabled:opacity-30"
+                className="rounded px-1 text-[13px] leading-3 text-ink-400 transition hover:text-ink-800 disabled:opacity-30"
               >
                 ▲
               </button>
@@ -745,7 +730,7 @@ function CategoryRow({
                 disabled={orderSaving}
                 onClick={() => move(1)}
                 aria-label={`Move ${c.name} down`}
-                className="rounded px-1 text-[9px] leading-3 text-ink-400 transition hover:text-ink-800 disabled:opacity-30"
+                className="rounded px-1 text-[13px] leading-3 text-ink-400 transition hover:text-ink-800 disabled:opacity-30"
               >
                 ▼
               </button>
@@ -754,26 +739,24 @@ function CategoryRow({
         </td>
         <td className="px-4 py-3.5">
           <p className="font-medium text-ink-900">{c.name}</p>
-          {c.description && <p className="mt-0.5 line-clamp-1 text-xs text-ink-500">{c.description}</p>}
+          {c.description && <p className="mt-0.5 line-clamp-1 text-[13px] text-ink-500">{c.description}</p>}
         </td>
-        <td className="px-4 py-3.5">
-          <span className="rounded-md bg-ink-50 px-1.5 py-0.5 font-mono text-[11px] text-ink-600 ring-1 ring-inset ring-line">
-            {c.minScore}–{c.maxScore}
-          </span>
+        <td className="num whitespace-nowrap px-4 py-3.5 text-right text-ink-900">
+          {c.minScore} to {c.maxScore}
         </td>
-        <td className="px-4 py-3.5 text-ink-600">{c.step}</td>
-        <td className="px-4 py-3.5 text-ink-600">{Number(c.weight)}</td>
+        <td className="num px-4 py-3.5 text-right text-ink-900">{c.step}</td>
+        <td className="num px-4 py-3.5 text-right text-ink-900">{Number(c.weight).toFixed(1)}</td>
         <td className="px-4 py-3.5">
-          <span className={`text-[11px] font-medium ${c.isRequired ? "text-ink-700" : "text-ink-400"}`}>
+          <span className={`text-[13px] font-medium ${c.isRequired ? "text-ink-700" : "text-ink-400"}`}>
             {c.isRequired ? "Required" : "Optional"}
           </span>
         </td>
         <td className="px-4 py-3.5">
           <div className="flex gap-0.5">
-            <Button variant="ghost" className="px-2 py-1.5 text-xs" onClick={() => setEditing(true)} disabled={locked}>
+            <Button variant="ghost" className="px-2 py-1.5 text-[13px]" onClick={() => setEditing(true)} disabled={locked}>
               Edit
             </Button>
-            <Button variant="dangerGhost" className="px-2 py-1.5 text-xs" onClick={onRemove}>
+            <Button variant="dangerGhost" className="px-2 py-1.5 text-[13px]" onClick={onRemove}>
               Remove
             </Button>
           </div>
@@ -784,16 +767,16 @@ function CategoryRow({
 
   return (
     <tr className="bg-brand-50/50">
-      <td className="px-4 py-3.5 text-xs font-semibold text-ink-500">{index + 1}</td>
+      <td className="px-4 py-3.5 text-[13px] font-semibold text-ink-500">{index + 1}</td>
       <td className="px-4 py-3.5">
         <input
-          className={`${fieldClass} mb-1.5 px-2.5 py-1.5 text-xs`}
+          className={`${fieldClass} mb-1.5 px-2.5 py-1.5 text-[13px]`}
           value={name}
           onChange={(e) => setName(e.target.value)}
           aria-label="Category name"
         />
         <input
-          className={`${fieldClass} px-2.5 py-1.5 text-xs`}
+          className={`${fieldClass} px-2.5 py-1.5 text-[13px]`}
           value={desc}
           onChange={(e) => setDesc(e.target.value)}
           placeholder="Description"
@@ -801,16 +784,16 @@ function CategoryRow({
         />
       </td>
       <td className="px-4 py-3.5">
-        <span className="font-mono text-[11px] text-ink-600">{c.minScore}–{c.maxScore}</span>
-        {locked && <span className="mt-0.5 block text-[10px] text-ink-400">locked</span>}
+        <span className="num text-[13px] text-ink-500">{c.minScore} to {c.maxScore}</span>
+        {locked && <span className="mt-0.5 block text-[13px] text-ink-400">locked</span>}
       </td>
       <td className="px-4 py-3.5 text-ink-600">{c.step}</td>
       <td className="px-4 py-3.5 text-ink-600">{Number(c.weight)}</td>
-      <td className="px-4 py-3.5 text-[11px] text-ink-500">{c.isRequired ? "Required" : "Optional"}</td>
+      <td className="px-4 py-3.5 text-[13px] text-ink-500">{c.isRequired ? "Required" : "Optional"}</td>
       <td className="px-4 py-3.5">
         <div className="flex gap-1">
           <Button
-            className="px-2.5 py-1.5 text-xs"
+            className="px-2.5 py-1.5 text-[13px]"
             onClick={() => {
               onSave({ name, description: desc });
               setEditing(false);
@@ -820,7 +803,7 @@ function CategoryRow({
           </Button>
           <Button
             variant="secondary"
-            className="px-2.5 py-1.5 text-xs"
+            className="px-2.5 py-1.5 text-[13px]"
             onClick={() => {
               setName(c.name);
               setDesc(c.description ?? "");

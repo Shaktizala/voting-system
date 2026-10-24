@@ -17,17 +17,17 @@ let nextId = 1;
 const KIND_STYLES: Record<ToastKind, { icon: ReactNode; iconWrap: string; bar: string }> = {
   success: {
     icon: <IconCheck size={15} strokeWidth={2.5} />,
-    iconWrap: "bg-jade-400/15 text-jade-300 ring-jade-400/20",
+    iconWrap: "text-jade-300",
     bar: "bg-jade-400",
   },
   error: {
     icon: <IconAlert size={15} />,
-    iconWrap: "bg-coral-400/15 text-coral-300 ring-coral-400/20",
+    iconWrap: "text-coral-300",
     bar: "bg-coral-400",
   },
   info: {
     icon: <IconInfo size={15} />,
-    iconWrap: "bg-brand-400/15 text-brand-200 ring-brand-400/20",
+    iconWrap: "text-ink-300",
     bar: "bg-brand-400",
   },
 };
@@ -63,16 +63,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             <div
               key={item.id}
               role="status"
-              className="pointer-events-auto relative animate-toast-in overflow-hidden rounded-2xl border border-white/10 bg-ink-950/95 p-3.5 pr-10 text-sm text-white shadow-lift backdrop-blur-xl"
+              className="pointer-events-auto relative animate-toast-in overflow-hidden rounded-[10px] bg-ink-950 p-3.5 pr-10 text-sm text-white shadow-lift"
             >
               <div className="flex items-start gap-3">
-                <span
-                  className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ring-1 ring-inset ${style.iconWrap}`}
-                  aria-hidden="true"
-                >
+                <span className={`mt-0.5 shrink-0 ${style.iconWrap}`} aria-hidden="true">
                   {style.icon}
                 </span>
-                <p className="pt-1 leading-snug text-white/90">{item.message}</p>
+                <p className="leading-snug text-white">{item.message}</p>
               </div>
               <button
                 type="button"

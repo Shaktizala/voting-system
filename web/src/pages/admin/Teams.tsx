@@ -1,8 +1,30 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../../lib/api";
-import { Button, Card, ConfirmDialog, DataTable, EmptyState, ErrorBox, LabelledInput, PageTitle, Skeleton } from "../../components/ui";
+import {
+  Button,
+  Card,
+  ConfirmDialog,
+  DataTable,
+  EmptyState,
+  ErrorBox,
+  LabelledInput,
+  PageTitle,
+  SectionHeading,
+  Skeleton,
+  StatCard,
+} from "../../components/ui";
 import { useToast } from "../../contexts/Toast";
+import { IconPlus, IconTeams, IconUsers, IconLayers } from "../../components/icons";
+
+function initials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+}
 
 export default function Teams() {
   const qc = useQueryClient();
@@ -34,44 +56,99 @@ export default function Teams() {
   });
 
   const teams = listQ.data?.teams ?? [];
+  const totalMembers = teams.reduce((sum: number, team: any) => sum + (team._count?.members ?? 0), 0);
+  const projects = teams.filter((team: any) => team.projectTitle).length;
 
   return (
     <>
-      <PageTitle title="Teams" subtitle="Organization-level teams, linked to rooms one event at a time" />
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Card>
-          <h2 className="mb-3 font-semibold">New team</h2>
-          <div className="space-y-2">
-            <LabelledInput label="Team name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-            <LabelledInput label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-            <LabelledInput label="Project title (optional)" value={form.projectTitle} onChange={(e) => setForm({ ...form, projectTitle: e.target.value })} />
+      <PageTitle
+        eyebrow="Organization"
+        title="Teams"
+        subtitle="Organization-level teams, linked to rooms one event at a time."
+      />
+
+      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <StatCard label="Teams" value={listQ.isLoading ? <Skeleton className="h-8 w-10" /> : teams.length} icon={<IconTeams size={19} />} tone="brand" />
+        <StatCard label="Members" value={listQ.isLoading ? <Skeleton className="h-8 w-10" /> : totalMembers} icon={<IconUsers size={19} />} tone="jade" />
+        <StatCard label="Projects showcased" value={listQ.isLoading ? <Skeleton className="h-8 w-10" /> : projects} icon={<IconLayers size={19} />} tone="ocean" />
+      </div>
+
+      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.5fr)]">
+        <Card className="xl:sticky xl:top-6">
+          <div className="flex items-start gap-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 ring-1 ring-inset ring-brand-100">
+              <IconPlus size={19} />
+            </span>
+            <div>
+              <h2 className="font-display text-base font-semibold text-ink-900">New team</h2>
+              <p className="mt-0.5 text-xs text-ink-500">Create the team once, link it to any room.</p>
+            </div>
+          </div>
+          <div className="mt-5 space-y-3">
+            <LabelledInput label="Team name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Team Aurora" />
+            <LabelledInput label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="What does this team work on?" />
+            <LabelledInput label="Project title (optional)" value={form.projectTitle} onChange={(e) => setForm({ ...form, projectTitle: e.target.value })} placeholder="e.g. Atlas — smarter dispatch" />
             {error && <ErrorBox>{error}</ErrorBox>}
             <Button
+              className="w-full"
               onClick={() => {
                 if (!form.name.trim()) return setError("Team name is required");
                 create.mutate();
               }}
               disabled={create.isPending}
             >
-              Create team
+              {create.isPending ? "Creating…" : "Create team"}
             </Button>
           </div>
         </Card>
 
-        <div className="lg:col-span-2">
+        <div>
+          <SectionHeading
+            title="All teams"
+            count={teams.length}
+            description="Teams can be linked to any number of rooms."
+          />
           {listQ.isLoading ? (
-            <Skeleton className="h-48" />
+            <Skeleton className="h-56 rounded-2xl" />
           ) : teams.length === 0 ? (
-            <EmptyState title="No teams yet" hint="Create your first team on the left." />
+            <EmptyState
+              title="No teams yet"
+              hint="Create your first team on the left, then link it to a room."
+              icon={<IconTeams size={22} />}
+            />
           ) : (
             <DataTable head={["Team", "Project", "Members", "Actions"]}>
-              {teams.map((t) => (
-                <tr key={t.id} className="border-t border-gray-100">
-                  <td className="px-3 py-2 font-medium">{t.name}</td>
-                  <td className="px-3 py-2 text-gray-600">{t.projectTitle ?? "—"}</td>
-                  <td className="px-3 py-2">{t._count?.members ?? 0}</td>
-                  <td className="px-3 py-2">
-                    <Button variant="ghost" className="text-xs text-red-700" onClick={() => setConfirmDelete(t)}>Delete</Button>
+              {teams.map((team) => (
+                <tr key={team.id}>
+                  <td className="px-4 py-3.5">
+                    <div className="flex items-center gap-2.5">
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-brand-100 to-brand-200 text-[10px] font-bold text-brand-700">
+                        {initials(team.name)}
+                      </span>
+                      <span className="font-medium text-ink-900">{team.name}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3.5 text-ink-600">
+                    {team.projectTitle ? (
+                      <span className="line-clamp-1">{team.projectTitle}</span>
+                    ) : (
+                      <span className="text-xs text-ink-400">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-ink-50 px-2 py-1 text-xs font-medium text-ink-600 ring-1 ring-inset ring-line">
+                      <IconUsers size={12} className="text-ink-400" />
+                      {team._count?.members ?? 0}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <Button
+                      variant="dangerGhost"
+                      className="px-2 py-1.5 text-xs"
+                      onClick={() => setConfirmDelete(team)}
+                    >
+                      Delete
+                    </Button>
                   </td>
                 </tr>
               ))}

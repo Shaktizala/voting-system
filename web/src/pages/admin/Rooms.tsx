@@ -2,8 +2,32 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../../lib/api";
-import { Button, Card, ConfirmDialog, EmptyState, ErrorBox, LabelledInput, LabelledSelect, PageTitle, Skeleton, StatusBadge } from "../../components/ui";
+import {
+  Button,
+  buttonClass,
+  Card,
+  ConfirmDialog,
+  EmptyState,
+  ErrorBox,
+  LabelledInput,
+  LabelledSelect,
+  PageTitle,
+  SectionHeading,
+  Skeleton,
+  StatCard,
+  StatusBadge,
+} from "../../components/ui";
 import { useToast } from "../../contexts/Toast";
+import {
+  IconArrowRight,
+  IconChart,
+  IconPlus,
+  IconRooms,
+  IconSettings,
+  IconTeams,
+  IconTrophy,
+  IconUsers,
+} from "../../components/icons";
 
 export default function Rooms() {
   const qc = useQueryClient();
@@ -40,64 +64,179 @@ export default function Rooms() {
   });
 
   const rooms = listQ.data?.rooms ?? [];
+  const activeRooms = rooms.filter((room) => room.status === "ACTIVE").length;
+  const draftRooms = rooms.filter((room) => room.status === "DRAFT").length;
+  const publishedRooms = rooms.filter((room) => room.publishedAt).length;
 
   return (
     <>
-      <PageTitle title="Rooms" subtitle="Evaluation rooms with their own join codes, categories, and state" />
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Card>
-          <h2 className="mb-3 font-semibold"><span id="new-room">New room</span></h2>
-          <div className="space-y-2">
-            <LabelledInput label="Room name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-            <LabelledInput label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+      <PageTitle
+        eyebrow="Sessions"
+        title="Rooms"
+        subtitle="Evaluation rooms with their own join codes, categories, and state."
+      />
+
+      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <StatCard label="Total rooms" value={listQ.isLoading ? <Skeleton className="h-8 w-10" /> : rooms.length} icon={<IconRooms size={19} />} tone="brand" />
+        <StatCard label="Active now" value={listQ.isLoading ? <Skeleton className="h-8 w-10" /> : activeRooms} hint={draftRooms > 0 ? `${draftRooms} draft${draftRooms === 1 ? "" : "s"} waiting` : "Ready for voting"} icon={<IconChart size={19} />} tone="jade" />
+        <StatCard label="Published results" value={listQ.isLoading ? <Skeleton className="h-8 w-10" /> : publishedRooms} icon={<IconTrophy size={19} />} tone="ocean" />
+      </div>
+
+      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.55fr)]">
+        <Card className="xl:sticky xl:top-6" >
+          <div id="new-room" className="flex items-start gap-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 ring-1 ring-inset ring-brand-100">
+              <IconPlus size={19} />
+            </span>
+            <div>
+              <h2 className="font-display text-base font-semibold text-ink-900">New room</h2>
+              <p className="mt-0.5 text-xs text-ink-500">A join code is generated automatically.</p>
+            </div>
+          </div>
+          <div className="mt-5 space-y-3">
+            <LabelledInput label="Room name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Spring Demo Day" />
+            <LabelledInput label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Optional context for participants" />
             <LabelledSelect label="Access mode" value={form.accessMode} onChange={(e) => setForm({ ...form, accessMode: e.target.value })}>
               <option value="RESTRICTED">Restricted — assigned participants only</option>
               <option value="OPEN_WITH_CODE">Open with code — any active participant</option>
             </LabelledSelect>
             {error && <ErrorBox>{error}</ErrorBox>}
-            <Button onClick={() => (!form.name.trim() ? setError("Room name is required") : create.mutate())} disabled={create.isPending}>
-              Create room
+            <Button
+              className="w-full"
+              onClick={() => (!form.name.trim() ? setError("Room name is required") : create.mutate())}
+              disabled={create.isPending}
+            >
+              {create.isPending ? "Creating…" : "Create room"}
             </Button>
+          </div>
+          <div className="mt-5 rounded-xl border border-line bg-ink-50/50 px-3.5 py-3">
+            <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-500">
+              <IconSettings size={12} />
+              Next steps
+            </p>
+            <p className="mt-1.5 text-[12px] leading-relaxed text-ink-500">
+              Configure categories, link teams, and assign members. Activate the room when you're
+              ready to open voting.
+            </p>
           </div>
         </Card>
 
-        <div className="lg:col-span-2 space-y-3">
+        <section>
+          <SectionHeading
+            title="All rooms"
+            count={rooms.length}
+            description="Open a room to configure it, or jump straight to the live dashboard."
+          />
           {listQ.isLoading ? (
-            <Skeleton className="h-64" />
+            <div className="space-y-3">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <Skeleton key={index} className="h-40 rounded-2xl" />
+              ))}
+            </div>
           ) : rooms.length === 0 ? (
-            <EmptyState title="No rooms yet" hint="Create one to start an evaluation session." />
+            <EmptyState
+              title="No rooms yet"
+              hint="Create one to start an evaluation session. You can duplicate it later for the next event."
+              icon={<IconRooms size={22} />}
+              action={
+                <Button variant="secondary" onClick={() => document.getElementById("new-room")?.scrollIntoView({ behavior: "smooth", block: "center" })}>
+                  Start with a new room
+                </Button>
+              }
+            />
           ) : (
-            rooms.map((r) => (
-              <Card key={r.id}>
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <Link to={`/admin/rooms/${r.id}`} className="font-semibold hover:underline">{r.name}</Link>
-                      <StatusBadge status={r.status} />
+            <div className="space-y-3">
+              {rooms.map((room) => (
+                <Card key={room.id} className="group overflow-hidden p-0 transition-all duration-300 hover:border-brand-200 hover:shadow-lift">
+                  <span
+                    aria-hidden="true"
+                    className={`absolute inset-x-0 top-0 h-0.5 ${
+                      room.status === "ACTIVE"
+                        ? "bg-gradient-to-r from-jade-400 to-jade-200"
+                        : room.status === "CLOSED"
+                          ? "bg-gradient-to-r from-coral-400 to-coral-200"
+                          : "bg-gradient-to-r from-brand-400 to-brand-200"
+                    }`}
+                  />
+                  <div className="p-5 sm:p-6">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Link
+                            to={`/admin/rooms/${room.id}`}
+                            className="font-display text-[17px] font-semibold text-ink-900 transition-colors hover:text-brand-700"
+                          >
+                            {room.name}
+                          </Link>
+                          <StatusBadge status={room.status} />
+                          {room.publishedAt && (
+                            <span className="rounded-full bg-ocean-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-ocean-700 ring-1 ring-inset ring-ocean-200">
+                              Results published
+                            </span>
+                          )}
+                        </div>
+                        {room.description ? (
+                          <p className="mt-1 line-clamp-1 text-sm text-ink-500">{room.description}</p>
+                        ) : (
+                          <p className="mt-1 text-sm italic text-ink-400">No description</p>
+                        )}
+                      </div>
+                      {room.joinCode && (
+                        <span className="rounded-lg border border-line bg-ink-50/70 px-2.5 py-1.5 font-mono text-[11px] font-semibold tracking-[0.14em] text-ink-600" title="Join code">
+                          {room.joinCode}
+                        </span>
+                      )}
                     </div>
-                    <p className="mt-1 text-sm text-gray-500">
-                      {r._count.members} participants · {r._count.roomTeams} teams · {r._count.categories} categories
-                      {r.publishedAt ? " · results published" : ""}
-                    </p>
+
+                    <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] font-medium text-ink-500">
+                      <span className="inline-flex items-center gap-1.5">
+                        <IconUsers size={13} className="text-ink-400" />
+                        {room._count.members} participants
+                      </span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <IconTeams size={13} className="text-ink-400" />
+                        {room._count.roomTeams} teams
+                      </span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <IconSettings size={13} className="text-ink-400" />
+                        {room._count.categories} categories
+                      </span>
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap items-center gap-1.5 border-t border-line pt-4">
+                      <Link to={`/admin/rooms/${room.id}`} className={buttonClass("secondary", "px-3 py-2 text-xs")}>
+                        Configure
+                      </Link>
+                      <Link to={`/room/${room.id}`} className={buttonClass("ghost", "px-3 py-2 text-xs")}>
+                        Live dashboard
+                        <IconArrowRight size={13} />
+                      </Link>
+                      <span className="mx-1 hidden h-4 w-px bg-line sm:block" aria-hidden="true" />
+                      {room.status === "DRAFT" && (
+                        <Button className="px-3 py-2 text-xs" onClick={() => setStatus.mutate({ id: room.id, status: "ACTIVE" })}>
+                          Activate
+                        </Button>
+                      )}
+                      {room.status === "ACTIVE" && (
+                        <Button variant="secondary" className="px-3 py-2 text-xs" onClick={() => setStatus.mutate({ id: room.id, status: "CLOSED" })}>
+                          Close
+                        </Button>
+                      )}
+                      {room.status === "CLOSED" && (
+                        <Button variant="secondary" className="px-3 py-2 text-xs" onClick={() => setStatus.mutate({ id: room.id, status: "ARCHIVED" })}>
+                          Archive
+                        </Button>
+                      )}
+                      <Button variant="ghost" className="ml-auto px-3 py-2 text-xs" onClick={() => setConfirmDup(room)}>
+                        Duplicate
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-1">
-                    <Link to={`/admin/rooms/${r.id}`} className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-800 hover:bg-gray-100">Configure</Link>
-                    {r.status === "DRAFT" && (
-                      <Button className="text-xs" onClick={() => setStatus.mutate({ id: r.id, status: "ACTIVE" })}>Activate</Button>
-                    )}
-                    {r.status === "ACTIVE" && (
-                      <Button variant="secondary" className="text-xs" onClick={() => setStatus.mutate({ id: r.id, status: "CLOSED" })}>Close</Button>
-                    )}
-                    {r.status === "CLOSED" && (
-                      <Button variant="secondary" className="text-xs" onClick={() => setStatus.mutate({ id: r.id, status: "ARCHIVED" })}>Archive</Button>
-                    )}
-                    <Button variant="ghost" className="text-xs" onClick={() => setConfirmDup(r)}>Duplicate</Button>
-                  </div>
-                </div>
-              </Card>
-            ))
+                </Card>
+              ))}
+            </div>
           )}
-        </div>
+        </section>
       </div>
 
       <ConfirmDialog

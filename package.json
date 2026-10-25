@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "dev": "concurrently -n api,web -c blue,green \"npm run dev -w server\" \"npm run dev -w web\"",
+    "dev:lan": "concurrently -n api,web -c blue,green \"npm run dev -w server\" \"npm run dev -w web -- --host\"",
     "dev:server": "npm run dev -w server",
     "dev:web": "npm run dev -w web",
     "db:up": "docker compose up -d postgres redis",

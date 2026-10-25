@@ -9,6 +9,13 @@ export const teamRepo = {
       include: { _count: { select: { members: { where: { deletedAt: null, status: "ACTIVE" } } } } },
     });
   },
+  /** Lightweight lookup used by bulk import duplicate detection. */
+  listNames() {
+    return prisma.team.findMany({
+      select: { id: true, name: true, deletedAt: true },
+      orderBy: { name: "asc" },
+    });
+  },
   findById(id: string) {
     return prisma.team.findFirst({ where: { id, deletedAt: null } });
   },

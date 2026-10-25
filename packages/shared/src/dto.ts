@@ -51,6 +51,18 @@ export const teamCreateSchema = z.object({
 });
 export const teamPatchSchema = teamCreateSchema.partial();
 
+/** Multipart options for CSV team import (values arrive as strings). */
+export const teamImportOptionsSchema = z.object({
+  roomId: z
+    .union([z.string().cuid(), z.literal(""), z.null(), z.undefined()])
+    .optional()
+    .transform((value) => value || null),
+  allOrNothing: z
+    .union([z.boolean(), z.literal("true"), z.literal("false"), z.undefined()])
+    .optional()
+    .transform((value) => value === true || value === "true"),
+});
+
 /* -------------------------------- rooms -------------------------------- */
 export const roomSettingsSchema = z.object({
   allowVoteEdit: z.boolean().default(true),

@@ -131,6 +131,26 @@ paths:
       responses:
         "200": { description: deleted }
         "409": { description: referenced }
+  /teams/import/preview:
+    post:
+      tags: [teams]
+      summary: Dry-run a bulk team CSV (multipart; optional roomId; per-row report)
+      responses:
+        "200": { description: team/row summary with validation errors }
+        "400": { description: malformed CSV, missing columns, or invalid room }
+  /teams/import/commit:
+    post:
+      tags: [teams]
+      summary: Create teams and participants from CSV; optionally link every team to a room
+      responses:
+        "200": { description: created teams/participants, credentials, failed rows }
+        "400": { description: all-or-nothing rejected the file }
+  /teams/import/template:
+    get:
+      tags: [teams]
+      summary: Download the bulk team CSV template
+      responses:
+        "200": { description: CSV template }
 
   /rooms:
     get:

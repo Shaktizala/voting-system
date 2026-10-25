@@ -150,6 +150,9 @@ concurrency, config locking, result arithmetic and CSV injection escaping.
 1. **Participants** — create users individually or import CSV/XLSX
    (`name, username, email, team`); temp accounts get `mustChangePassword`.
 2. **Teams** — organization teams; room teams control presentation order.
+   Bulk import a CSV of teams and members (`team_name` repeated per participant),
+   optionally linking every imported team to a room and adding those members to
+   that room in the same step.
 3. **Rooms** — create a room (DRAFT), add categories (dynamic: name, min/max,
    step, weight, required), link teams, assign participants
    (RESTRICTED = assigned only; OPEN_WITH_CODE = anyone with the code joins and

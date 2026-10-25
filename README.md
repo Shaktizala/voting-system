@@ -59,6 +59,31 @@ npm run dev -w web                # vite on :5173 (or build & serve web/dist sta
 The `server` service runs `prisma migrate deploy`, seeds (first boot), and starts
 the compiled API.
 
+## Sign-in
+
+| Who | How |
+|---|---|
+| Attendees (Google sign-in on) | **Continue with Google** with the email they registered with. Only emails already imported can sign in, so there is no password sheet to share or leak. Afterwards they may add a password of their own (key icon next to their name). |
+| Attendees (Google sign-in off) | Temporary password from the import's credentials sheet, replaced at first sign-in. |
+| Admins | Username/email + password (always). |
+| Fallback | If someone's Google account can't sign in (e.g. a school blocks third-party apps), an admin uses **Reset password** to issue a one-time password. |
+
+Turn on Google sign-in (free, about 5 minutes):
+
+1. [Google Cloud console](https://console.cloud.google.com/) → create a project →
+   **APIs & Services → OAuth consent screen**: External, app name, support
+   email; scopes `openid`, `email`, `profile` only (no verification review needed).
+   Set the publishing status to **In production** so any Google account can sign in.
+2. **Credentials → Create credentials → OAuth client ID** → *Web application*.
+   Authorized redirect URI: `<PUBLIC_URL>/api/auth/google/callback`
+   (local: `http://localhost:5173/api/auth/google/callback`).
+3. Put `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and (when deployed)
+   `PUBLIC_URL` in `server/.env`, then restart the API.
+
+Accounts imported while Google sign-in is on have no password. Accounts that
+already had a temporary password simply stop needing it: signing in with
+Google retires it.
+
 ## Scoring model (enforced server-side)
 
 - Every round presents **one team**; eligible voters score it on the room's
@@ -129,6 +154,10 @@ concurrency, config locking, result arithmetic and CSV injection escaping.
   failures per account (5 min, cleared by an admin password reset).
 - Temporary passwords: the API itself refuses everything except the auth
   endpoints until the user sets their own password.
+- Google sign-in: authorization code flow with PKCE, `state` and `nonce` bound
+  to the browser by a 10-minute httpOnly cookie; the ID token's signature,
+  audience, expiry and `email_verified` are checked; no self sign-up; the
+  post-login redirect only accepts same-origin paths.
 - Rate limits are **per signed-in account**, not per IP, so a whole venue on
   one Wi-Fi router (one public IP) is never throttled together; only anonymous
   traffic is limited per IP, with venue-sized ceilings. Set `TRUST_PROXY` to
@@ -148,11 +177,19 @@ concurrency, config locking, result arithmetic and CSV injection escaping.
 ## Admin workflow cheat-sheet
 
 1. **Participants** — create users individually or import CSV/XLSX
-   (`name, username, email, team`); temp accounts get `mustChangePassword`.
+   (`name, username, email, team`); with Google sign-in on they get no password,
+   otherwise temp accounts get `mustChangePassword`.
 2. **Teams** — organization teams; room teams control presentation order.
    Bulk import a CSV of teams and members (`team_name` repeated per participant),
    optionally linking every imported team to a room and adding those members to
-   that room in the same step.
+   that room in the same step. A sign-up **form export** (one row per team: a
+   team-name column plus member-email columns, e.g. Google Forms) works as-is:
+   names and usernames come from the emails, placeholders like `N/a` are
+   skipped, and every automatic fix is listed in the preview. Choosing
+   **Create a new room** sets up a draft room with starter categories (Innovation,
+   Technical depth, Impact, Presentation; editable until the first vote), so
+   after the import you only assign a moderator and **Activate**. Deleting a team
+   frees its name for re-import.
 3. **Rooms** — create a room (DRAFT), add categories (dynamic: name, min/max,
    step, weight, required), link teams, assign participants
    (RESTRICTED = assigned only; OPEN_WITH_CODE = anyone with the code joins and

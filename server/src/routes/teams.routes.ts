@@ -34,7 +34,7 @@ r.get("/", wrap(async (_req, res) => {
 r.post("/import/preview", requirePermission("teams:write"), upload.single("file"), wrap(async (req, res) => {
   if (!req.file) throw badRequest("No file uploaded");
   const options = parseBody(teamImportOptionsSchema, req.body ?? {});
-  res.json(await teamImportService.previewImport(req.file.buffer, req.file.originalname, options.roomId));
+  res.json(await teamImportService.previewImport(req.file.buffer, req.file.originalname, options.roomId, options.newRoomName));
 }));
 
 r.post("/import/commit", requirePermission("teams:write"), upload.single("file"), wrap(async (req, res) => {
@@ -44,7 +44,7 @@ r.post("/import/commit", requirePermission("teams:write"), upload.single("file")
     await teamImportService.commitImport(
       req.file.buffer,
       req.file.originalname,
-      { roomId: options.roomId, allOrNothing: options.allOrNothing },
+      { roomId: options.roomId, allOrNothing: options.allOrNothing, newRoomName: options.newRoomName },
       req.user!.id,
       req.ip ?? ""
     )

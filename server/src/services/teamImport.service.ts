@@ -10,6 +10,8 @@ import { deriveVotingState, roomService } from "./room.service";
 import { rtEvents } from "../realtime/emit";
 import { badRequest, conflict } from "../utils/errors";
 import { sanitizeText } from "../utils/sanitize";
+import { categoryService } from "./category.service";
+import { detectFormExport, expandFormExport, usernameBaseFromEmail } from "./formExport";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const USERNAME_RE = /^[a-z0-9._-]{3,60}$/;
@@ -26,6 +28,8 @@ const TEMPLATE_HEADER = [
 type ImportRole = "PARTICIPANT" | "MODERATOR";
 
 interface ParsedRow {
+  /** CSV line number (header is line 1); several rows share it in a form export. */
+  line: number;
   teamName: string;
   teamDescription: string;
   projectTitle: string;
@@ -34,7 +38,23 @@ interface ParsedRow {
   participantUsername: string;
   participantRole: string;
   hasParticipant: boolean;
+  /** Form export: name/username come from the email instead of the file. */
+  deriveIdentity: boolean;
+  /** Automatic corrections, shown in the preview. */
+  notes: string[];
+  /** Problems found while reading the file (e.g. an unapproved idea). */
+  errors: string[];
 }
+
+type ImportFormat = "template" | "form-export";
+
+/** Starting categories for a room created by the import; editable until the first vote. */
+const DEFAULT_CATEGORIES = [
+  { name: "Innovation", description: "How new or creative is the idea?" },
+  { name: "Technical depth", description: "How well is it built?" },
+  { name: "Impact", description: "How useful is it, and for whom?" },
+  { name: "Presentation", description: "How clear and convincing was the demo?" },
+].map((c) => ({ ...c, minScore: 1, maxScore: 10, step: 1, weight: 1, isRequired: true }));
 
 export interface ImportParticipant {
   name: string;
@@ -47,6 +67,8 @@ export interface ImportParticipant {
 
 export interface ImportRowReport {
   row: number;
+  /** Automatic corrections applied to this row (form exports). */
+  notes?: string[];
   teamName?: string;
   teamDescription?: string;
   projectTitle?: string;
@@ -66,6 +88,8 @@ interface TeamGroup {
 
 export interface ImportTeamSummary {
   name: string;
+  /** A deleted, never-used team holds this name; commit renames it first. */
+  releasesDeletedTeamId?: string;
   description: string | null;
   projectTitle: string | null;
   valid: boolean;
@@ -156,13 +180,21 @@ export const teamImportService = {
   },
 
   /** Dry-run: parse, validate and group every row into teams without writing. */
-  async previewImport(buffer: Buffer<ArrayBufferLike>, filename: string, roomId?: string | null) {
-    const rawRows = parseFile(buffer, filename);
+  async previewImport(
+    buffer: Buffer<ArrayBufferLike>,
+    filename: string,
+    roomId?: string | null,
+    newRoomName?: string | null
+  ) {
+    const parsedFile = parseFile(buffer, filename);
+    const rawRows = parsedFile.rows;
     if (rawRows.length > env.IMPORT_MAX_ROWS) {
       throw badRequest(`File exceeds the row limit (${env.IMPORT_MAX_ROWS} rows)`);
     }
+    if (roomId && newRoomName) throw badRequest("Choose an existing room or a new room name, not both");
 
     const room = roomId ? await resolveRoom(roomId) : null;
+    if (parsedFile.format === "form-export") await deriveIdentities(rawRows);
     const existingTeams = await teamRepo.listNames();
     const existingTeamByName = new Map(existingTeams.map((team) => [team.name.toLowerCase(), team]));
 
@@ -184,8 +216,9 @@ export const teamImportService = {
 
     for (let index = 0; index < rawRows.length; index++) {
       const raw = rawRows[index];
-      const rowNumber = index + 2; // CSV line number: header is line 1
-      const errors: string[] = [];
+      const rowNumber = raw.line;
+      const errors: string[] = [...raw.errors];
+      const notes = raw.notes.length ? { notes: raw.notes } : {};
 
       if (!raw.teamName) errors.push("Missing team name");
       else if (raw.teamName.length > 120) errors.push("Team name must be 120 characters or fewer");
@@ -195,6 +228,7 @@ export const teamImportService = {
       if (!raw.hasParticipant) {
         rows.push({
           row: rowNumber,
+          ...notes,
           teamName: raw.teamName || undefined,
           teamDescription: raw.teamDescription || undefined,
           projectTitle: raw.projectTitle || undefined,
@@ -264,6 +298,7 @@ export const teamImportService = {
 
       rows.push({
         row: rowNumber,
+        ...notes,
         teamName: raw.teamName || undefined,
         teamDescription: raw.teamDescription || undefined,
         projectTitle: raw.projectTitle || undefined,
@@ -312,13 +347,24 @@ export const teamImportService = {
       }
     }
 
+    // deleted teams with no voting history give their name back to the import
+    const deletedHolders = [...groups.values()]
+      .map((group) => existingTeamByName.get(group.key))
+      .filter((team): team is NonNullable<typeof team> => Boolean(team?.deletedAt));
+    const releasable = await teamRepo.withoutHistory(deletedHolders.map((team) => team.id));
+    const releases = new Map<string, string>();
+
     for (const group of groups.values()) {
       if (group.name.length > 120) addErrors(group.errors, ["Team name must be 120 characters or fewer"]);
       const existing = existingTeamByName.get(group.key);
-      if (existing) {
+      if (existing?.deletedAt && releasable.has(existing.id)) {
+        releases.set(group.key, existing.id);
+        const first = group.rows[0];
+        if (first) first.notes = [...(first.notes ?? []), "A deleted team (never used for voting) had this name; it is released"];
+      } else if (existing) {
         addErrors(group.errors, [
           existing.deletedAt
-            ? `A deleted team still reserves the name "${existing.name}"`
+            ? `A deleted team with voting history still reserves the name "${existing.name}"`
             : `A team named "${existing.name}" already exists`,
         ]);
       }
@@ -331,8 +377,10 @@ export const teamImportService = {
     const teams: ImportTeamSummary[] = [...groups.values()].map((group) => {
       const validRows = group.rows.filter((row) => row.valid);
       const importable = group.errors.length === 0 && validRows.length > 0;
+      const releaseId = releases.get(group.key);
       return {
         name: group.name,
+        ...(releaseId ? { releasesDeletedTeamId: releaseId } : {}),
         description: group.description || null,
         projectTitle: group.projectTitle || null,
         valid: importable,
@@ -346,9 +394,15 @@ export const teamImportService = {
     });
 
     const validRows = rows.filter((row) => row.valid);
+    const newRoom = !room && newRoomName ? newRoomName.trim() : null;
     return {
       filename,
+      format: parsedFile.format,
+      formatNotes: parsedFile.formatNotes,
       room: room ? { id: room.id, name: room.name, status: room.status } : null,
+      newRoom: newRoom
+        ? { name: newRoom, status: "DRAFT", categories: DEFAULT_CATEGORIES.map(({ name, minScore, maxScore, weight }) => ({ name, minScore, maxScore, weight })) }
+        : null,
       rowCount: rows.length,
       teamCount: teams.length,
       participantCount: rows.filter((row) => row.participant).length,
@@ -370,16 +424,27 @@ export const teamImportService = {
   async commitImport(
     buffer: Buffer<ArrayBufferLike>,
     filename: string,
-    options: { roomId?: string | null; allOrNothing?: boolean },
+    options: { roomId?: string | null; allOrNothing?: boolean; newRoomName?: string | null },
     actorId: string,
     ip?: string
   ) {
-    const preview = await this.previewImport(buffer, filename, options.roomId);
+    const preview = await this.previewImport(buffer, filename, options.roomId, options.newRoomName);
     if (preview.errorCount > 0 && options.allOrNothing) {
       throw badRequest(`All-or-nothing: file has ${preview.errorCount} invalid rows`, preview.rows);
     }
 
-    const room = options.roomId ? await resolveRoom(options.roomId) : null;
+    let room = options.roomId ? await resolveRoom(options.roomId) : null;
+    let roomCreated = false;
+    const deletedById = new Map(
+      (await teamRepo.listNames()).filter((team) => team.deletedAt).map((team) => [team.id, team])
+    );
+    if (!room && preview.newRoom && preview.validTeamCount > 0) {
+      // a draft room with starter categories: the admin assigns a moderator and activates it
+      const created = await roomService.create({ name: preview.newRoom.name, accessMode: "RESTRICTED" }, actorId, ip);
+      for (const category of DEFAULT_CATEGORIES) await categoryService.create(created.id, category, actorId, ip);
+      room = await resolveRoom(created.id);
+      roomCreated = true;
+    }
     const roomTeams = room ? await roomRepo.listRoomTeams(room.id) : [];
     let nextOrder = roomTeams.reduce((max, roomTeam) => Math.max(max, roomTeam.presentationOrder), 0) + 1;
 
@@ -423,6 +488,8 @@ export const teamImportService = {
 
       let team: { id: string; name: string };
       try {
+        const holder = teamSummary.releasesDeletedTeamId ? deletedById.get(teamSummary.releasesDeletedTeamId) : undefined;
+        if (holder) await teamRepo.releaseDeletedName(holder.id, holder.name);
         team = await teamRepo.create({
           name: teamSummary.name,
           description: teamSummary.description,
@@ -482,26 +549,26 @@ export const teamImportService = {
             if (clash.length > 0) {
               throw new Error("Username or email was taken by another request while importing");
             }
-            const temporaryPassword = authService.generateTemporaryPassword();
-            const passwordHash = await authService.hashPassword(temporaryPassword);
+            const { temporaryPassword, data: login } = await authService.initialCredentials(row.participant.role);
             const user = await userRepo.create({
               name: row.participant.name,
               username: row.participant.username,
               email: row.participant.email,
               role: row.participant.role,
               teamId: team.id,
-              passwordHash,
-              mustChangePassword: true,
+              ...login,
             });
             userId = user.id;
             participantsCreated++;
-            credentials.push({
-              name: row.participant.name,
-              username: row.participant.username,
-              email: row.participant.email,
-              temporaryPassword,
-              teamName: team.name,
-            });
+            if (temporaryPassword) {
+              credentials.push({
+                name: row.participant.name,
+                username: row.participant.username,
+                email: row.participant.email,
+                temporaryPassword,
+                teamName: team.name,
+              });
+            }
           }
 
           if (room) await attachRoomMember(room.id, userId, team.id);
@@ -543,6 +610,8 @@ export const teamImportService = {
         rowsCommitted,
         rowsSkipped: preview.rowCount - rowsCommitted,
         roomId: room?.id ?? null,
+        roomCreated,
+        format: preview.format,
         mode: options.allOrNothing ? "all_or_nothing" : "valid_only",
       },
       ip,
@@ -550,7 +619,7 @@ export const teamImportService = {
 
     return {
       filename,
-      room: room ? { id: room.id, name: room.name } : null,
+      room: room ? { id: room.id, name: room.name, created: roomCreated } : null,
       teamsCreated,
       teamsFailed,
       participantsCreated,
@@ -586,28 +655,55 @@ function unique(values: string[]) {
   return [...new Set(values)];
 }
 
-function parseFile(buffer: Buffer<ArrayBufferLike>, filename: string): ParsedRow[] {
+function parseFile(
+  buffer: Buffer<ArrayBufferLike>,
+  filename: string
+): { rows: ParsedRow[]; format: ImportFormat; formatNotes: string[] } {
   if (!/\.csv$/i.test(filename)) throw badRequest("Only CSV files are accepted for team import");
 
+  const labels: Record<string, string> = {};
   const parsed = parse<Record<string, unknown>>(buffer.toString("utf8"), {
     header: true,
     skipEmptyLines: "greedy",
-    transformHeader: (header) => HEADER_MAP[normalizeHeader(header)] ?? normalizeHeader(header),
+    transformHeader: (header) => {
+      const key = HEADER_MAP[normalizeHeader(header)] ?? normalizeHeader(header);
+      labels[key] = header.replace(/^\uFEFF/, "").trim();
+      return key;
+    },
   });
 
   const fatal = parsed.errors.find((error) => error.type === "Quotes" || error.type === "Delimiter");
   if (fatal) throw badRequest(`CSV parse error on line ${fatal.row ?? "?"}: ${fatal.message}`);
-  if (!(parsed.meta.fields ?? []).includes("teamName")) {
+  if (parsed.data.length === 0) throw badRequest("CSV has no data rows");
+  const fields = parsed.meta.fields ?? [];
+
+  // "One row per team" exports (e.g. Google Forms): team name + member email columns
+  const form = fields.includes("participantName") || fields.includes("participantUsername") ? null : detectFormExport(fields, labels);
+  if (form) {
+    const rows = expandFormExport(parsed.data, form);
+    return {
+      rows,
+      format: "form-export",
+      formatNotes: [
+        `Read as a form export: one row per team, with members from ${form.members.map((m) => `"${m.label}"`).join(", ")}.`,
+        "Names and usernames come from each email; people can sign in with their email too.",
+        ...(form.description ? [`Team descriptions come from "${labels[form.description] ?? form.description}".`] : []),
+        ...(form.approval ? [`Rows not approved in "${labels[form.approval] ?? form.approval}" are not imported.`] : []),
+      ],
+    };
+  }
+
+  if (!fields.includes("teamName")) {
     throw badRequest("Missing team_name column. Download the template to see the expected columns");
   }
-  if (parsed.data.length === 0) throw badRequest("CSV has no data rows");
 
-  return parsed.data.map((row) => {
+  const rows = parsed.data.map((row, index) => {
     const participantName = cell(row, "participantName");
     const participantEmail = cell(row, "participantEmail").toLowerCase();
     const participantUsername = cell(row, "participantUsername").toLowerCase();
     const participantRole = cell(row, "participantRole").toUpperCase();
     return {
+      line: index + 2,
       teamName: cell(row, "teamName"),
       teamDescription: cell(row, "teamDescription"),
       projectTitle: cell(row, "projectTitle"),
@@ -616,6 +712,40 @@ function parseFile(buffer: Buffer<ArrayBufferLike>, filename: string): ParsedRow
       participantUsername,
       participantRole,
       hasParticipant: Boolean(participantName || participantEmail || participantUsername || participantRole),
+      deriveIdentity: false,
+      notes: [],
+      errors: [],
     };
+  });
+  return { rows, format: "template", formatNotes: [] };
+}
+
+/**
+ * Form exports carry only emails. An email that already has an account keeps
+ * that account's username (so it is reused, not duplicated); otherwise the
+ * username is the email's local part, suffixed -2, -3 ... when taken.
+ */
+async function deriveIdentities(rows: ParsedRow[]) {
+  const targets = rows.filter((row) => row.deriveIdentity && row.participantEmail);
+  if (targets.length === 0) return;
+  const bases = targets.map((row) => usernameBaseFromEmail(row.participantEmail));
+  const candidates = bases.flatMap((base) => [base, ...Array.from({ length: 8 }, (_, i) => `${base}-${i + 2}`)]);
+  const existing = await userRepo.findManyByIdentities(candidates, targets.map((row) => row.participantEmail));
+  const byEmail = new Map(existing.map((user) => [user.email.toLowerCase(), user]));
+  const taken = new Set(existing.map((user) => user.username.toLowerCase()));
+
+  targets.forEach((row, i) => {
+    const owner = byEmail.get(row.participantEmail);
+    if (owner) {
+      row.participantUsername = owner.username.toLowerCase();
+      row.participantName = owner.name;
+      row.notes.push("Already has an account; it is reused");
+      return;
+    }
+    let username = bases[i];
+    for (let n = 2; taken.has(username) && n < 100; n++) username = `${bases[i]}-${n}`;
+    if (username !== bases[i]) row.notes.push(`Username "${bases[i]}" is taken; using "${username}"`);
+    taken.add(username);
+    row.participantUsername = username;
   });
 }

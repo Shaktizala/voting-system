@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { api, download, upload, ApiError } from "../../lib/api";
 import {
   Button,
@@ -34,8 +35,12 @@ interface ImportParticipant {
   existingUserId?: string;
 }
 
+/** Room-select value meaning "create a new room during the import". */
+const NEW_ROOM = "__new__";
+
 interface ImportRow {
   row: number;
+  notes?: string[];
   teamName?: string;
   participant?: ImportParticipant;
   valid: boolean;
@@ -44,7 +49,10 @@ interface ImportRow {
 
 interface ImportPreview {
   filename: string;
+  format: "template" | "form-export";
+  formatNotes: string[];
   room: { id: string; name: string; status: string } | null;
+  newRoom: { name: string; status: string; categories: { name: string; minScore: number; maxScore: number; weight: number }[] } | null;
   rowCount: number;
   teamCount: number;
   participantCount: number;
@@ -57,7 +65,7 @@ interface ImportPreview {
 }
 
 interface ImportResult {
-  room: { id: string; name: string } | null;
+  room: { id: string; name: string; created?: boolean } | null;
   teamsCreated: number;
   teamsFailed: number;
   participantsCreated: number;
@@ -89,17 +97,25 @@ export default function Teams() {
   /* ----------------------------- bulk import ----------------------------- */
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importRoomId, setImportRoomId] = useState("");
+  // "__new__" in the room select: create a draft room with starter categories during the import
+  const [newRoomName, setNewRoomName] = useState("");
+  const creatingRoom = importRoomId === NEW_ROOM;
   const [allOrNothing, setAllOrNothing] = useState(false);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  // a double-click must not start a second, concurrent import
+  const [committing, setCommitting] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const runPreview = async (file: File, roomId = importRoomId) => {
+  const roomFields = (roomId: string, roomName: string): Record<string, string> =>
+    roomId === NEW_ROOM ? (roomName.trim() ? { newRoomName: roomName.trim() } : {}) : roomId ? { roomId } : {};
+
+  const runPreview = async (file: File, roomId = importRoomId, roomName = newRoomName) => {
     try {
       setImportError(null);
-      const data = await upload("/teams/import/preview", file, roomId ? { roomId } : {});
+      const data = await upload("/teams/import/preview", file, roomFields(roomId, roomName));
       setPreview(data);
     } catch (e) {
       setPreview(null);
@@ -122,11 +138,12 @@ export default function Teams() {
   };
 
   const runCommit = async () => {
-    if (!importFile) return;
+    if (!importFile || committing) return;
+    setCommitting(true);
     try {
       setImportError(null);
       const data = (await upload("/teams/import/commit", importFile, {
-        ...(importRoomId ? { roomId: importRoomId } : {}),
+        ...roomFields(importRoomId, newRoomName),
         allOrNothing: String(allOrNothing),
       })) as ImportResult;
       setImportResult(data);
@@ -140,12 +157,18 @@ export default function Teams() {
       qc.invalidateQueries({ queryKey: ["teams"] });
       qc.invalidateQueries({ queryKey: ["participants"] });
       qc.invalidateQueries({ queryKey: ["rooms"] });
-      if (importRoomId) {
-        qc.invalidateQueries({ queryKey: ["roomTeams", importRoomId] });
-        qc.invalidateQueries({ queryKey: ["members", importRoomId] });
+      if (data.room) {
+        qc.invalidateQueries({ queryKey: ["roomTeams", data.room.id] });
+        qc.invalidateQueries({ queryKey: ["members", data.room.id] });
+      }
+      if (creatingRoom) {
+        setImportRoomId("");
+        setNewRoomName("");
       }
     } catch (e) {
       setImportError(e instanceof ApiError ? e.message : "Import failed");
+    } finally {
+      setCommitting(false);
     }
   };
 
@@ -234,12 +257,24 @@ export default function Teams() {
                 onChange={(e) => changeRoom(e.target.value)}
               >
                 <option value="">No room — teams only</option>
+                <option value={NEW_ROOM}>+ Create a new room…</option>
                 {rooms.map((room) => (
                   <option key={room.id} value={room.id}>
                     {room.name} ({room.status.toLowerCase()})
                   </option>
                 ))}
               </LabelledSelect>
+              {creatingRoom && (
+                <LabelledInput
+                  label="New room name"
+                  value={newRoomName}
+                  placeholder="e.g. Hacktoberfest finals"
+                  maxLength={120}
+                  onChange={(e) => setNewRoomName(e.target.value)}
+                  onBlur={() => importFile && void runPreview(importFile)}
+                  hint="Created as a draft with starter categories"
+                />
+              )}
 
               <label
                 onDragOver={(event) => {
@@ -271,7 +306,7 @@ export default function Teams() {
                 <span className="mt-2 text-sm font-semibold text-ink-800">
                   Drop a CSV here, or <span className="text-brand-600">browse</span>
                 </span>
-                <span className="mt-1 text-[13px] text-ink-400">One row per participant · max 5 MB</span>
+                <span className="mt-1 text-[13px] text-ink-400">One row per participant, or a sign-up form export (one row per team) · max 5 MB</span>
                 {importFile && (
                   <span className="mt-3 inline-flex max-w-full items-center gap-1.5 rounded-lg bg-white px-2.5 py-1.5 text-[13px] font-medium text-ink-600 ring-1 ring-line">
                     <IconFile size={13} className="shrink-0 text-brand-500" />
@@ -304,10 +339,31 @@ export default function Teams() {
                       <span className="rounded-full bg-coral-50 px-2.5 py-1 font-semibold text-coral-700 ring-1 ring-inset ring-coral-200">{preview.errorCount} with errors</span>
                     )}
                   </div>
+                  {preview.format === "form-export" && preview.formatNotes.length > 0 && (
+                    <ul className="mt-3 space-y-1 rounded-lg bg-ink-50 px-3.5 py-2.5 text-[13px] text-ink-700">
+                      {preview.formatNotes.map((note) => (
+                        <li key={note}>{note}</li>
+                      ))}
+                    </ul>
+                  )}
                   {preview.room && (
                     <p className="mt-2 text-[13px] text-ink-500">
                       Will link every imported team to <span className="font-medium text-ink-800">{preview.room.name}</span> and add members to that room.
                     </p>
+                  )}
+                  {preview.newRoom && (
+                    <div className="mt-2 text-[13px] text-ink-600">
+                      <p>
+                        Will create the room <span className="font-medium text-ink-900">{preview.newRoom.name}</span> (draft), link every imported team in file
+                        order and add all members as voters. Starting categories, editable until the first vote:
+                      </p>
+                      <p className="mt-1 text-ink-800">
+                        {preview.newRoom.categories.map((c) => `${c.name} (${c.minScore}–${c.maxScore})`).join(", ")}
+                      </p>
+                    </div>
+                  )}
+                  {creatingRoom && !preview.newRoom && (
+                    <p className="mt-2 text-[13px] text-[#92400e]">Enter a name for the new room to include it in this import.</p>
                   )}
 
                   <div className="mt-3 max-h-60 overflow-auto scrollbar-slim rounded-xl border border-line">
@@ -321,8 +377,8 @@ export default function Teams() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-line">
-                        {preview.rows.slice(0, 250).map((row) => (
-                          <tr key={row.row}>
+                        {preview.rows.slice(0, 250).map((row, index) => (
+                          <tr key={`${row.row}-${index}`}>
                             <td className="px-3 py-2 text-ink-500">{row.row}</td>
                             <td className="px-3 py-2 font-medium text-ink-800">{row.teamName ?? "—"}</td>
                             <td className="px-3 py-2 text-ink-600">
@@ -335,8 +391,9 @@ export default function Teams() {
                                 <span className="text-ink-400">Team only</span>
                               )}
                             </td>
-                            <td className={`px-3 py-2 ${row.valid ? "text-jade-700" : "text-coral-700"}`}>
-                              {row.valid ? "Ready" : row.errors.join("; ")}
+                            <td className="px-3 py-2">
+                              <span className={row.valid ? "text-jade-700" : "text-coral-700"}>{row.valid ? "Ready" : row.errors.join("; ")}</span>
+                              {row.notes && row.notes.length > 0 && <span className="block text-[12px] text-ink-500">{row.notes.join(" · ")}</span>}
                             </td>
                           </tr>
                         ))}
@@ -350,9 +407,10 @@ export default function Teams() {
                   <Button
                     className="mt-3 w-full"
                     onClick={runCommit}
-                    disabled={preview.validTeamCount === 0 || (preview.errorCount > 0 && allOrNothing)}
+                    disabled={committing || preview.validTeamCount === 0 || (preview.errorCount > 0 && allOrNothing)}
+                    aria-busy={committing}
                   >
-                    Import {preview.validTeamCount} team{preview.validTeamCount === 1 ? "" : "s"} · {preview.validParticipantCount} participant{preview.validParticipantCount === 1 ? "" : "s"}
+                    {committing ? "Importing…" : <>Import {preview.validTeamCount} team{preview.validTeamCount === 1 ? "" : "s"} · {preview.validParticipantCount} participant{preview.validParticipantCount === 1 ? "" : "s"}</>}
                   </Button>
                 </div>
               )}
@@ -368,7 +426,17 @@ export default function Teams() {
                       <strong>{importResult.participantsCreated}</strong> new participant{importResult.participantsCreated === 1 ? "" : "s"}, and assigned{" "}
                       <strong>{importResult.participantsAssigned}</strong> existing participant{importResult.participantsAssigned === 1 ? "" : "s"}.
                     </p>
-                    {importResult.room && <p>All imported teams were linked to <strong>{importResult.room.name}</strong>.</p>}
+                    {importResult.room && (
+                      <p>
+                        {importResult.room.created ? "Created" : "Linked every team to"} <strong>{importResult.room.name}</strong>
+                        {importResult.room.created ? " with all teams and members. " : ". "}
+                        Next: assign a moderator and activate it in{" "}
+                        <Link to={`/admin/rooms/${importResult.room.id}`} className="font-medium underline underline-offset-4">
+                          room setup
+                        </Link>
+                        .
+                      </p>
+                    )}
                     {importResult.rowsSkipped > 0 && (
                       <div className="rounded-lg bg-coral-50 px-3 py-2 text-coral-800">
                         <p className="font-medium">{importResult.rowsSkipped} row{importResult.rowsSkipped === 1 ? "" : "s"} skipped</p>
@@ -383,6 +451,12 @@ export default function Teams() {
                           <p className="mt-1 text-[12px]">Showing the first 20 failed rows.</p>
                         )}
                       </div>
+                    )}
+                    {importResult.participantsCreated > 0 && importResult.credentials.length === 0 && (
+                      <p>
+                        No passwords to share: new participants sign in with <strong>Continue with Google</strong> using
+                        the email they registered with.
+                      </p>
                     )}
                     {importResult.credentials.length > 0 && (
                       <>

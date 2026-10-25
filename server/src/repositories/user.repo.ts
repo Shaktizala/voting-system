@@ -63,6 +63,10 @@ export const userRepo = {
     });
   },
   /** Compare-and-set: only replaces the hash if it is still `expected` (a concurrent change wins). */
+  /** Compare-and-set so two concurrent first-password requests can't both win. */
+  setFirstPassword(id: string, passwordHash: string) {
+    return prisma.user.updateMany({ where: { id, hasPassword: false }, data: { passwordHash, hasPassword: true } });
+  },
   replacePasswordHashIf(id: string, expected: string, passwordHash: string) {
     return prisma.user.updateMany({ where: { id, passwordHash: expected }, data: { passwordHash } });
   },

@@ -17,6 +17,8 @@ export const changePasswordSchema = z.object({
   currentPassword: z.string().min(1),
   newPassword: z.string().min(10, "Minimum 10 characters").max(128),
 });
+/** First password for an account that so far only signs in with Google. */
+export const setPasswordSchema = changePasswordSchema.pick({ newPassword: true });
 
 /* ----------------------------- participants ---------------------------- */
 export const participantCreateSchema = z.object({
@@ -61,6 +63,13 @@ export const teamImportOptionsSchema = z.object({
     .union([z.boolean(), z.literal("true"), z.literal("false"), z.undefined()])
     .optional()
     .transform((value) => value === true || value === "true"),
+  /** Create a new draft room (with starter categories) and import into it. */
+  newRoomName: z
+    .string()
+    .trim()
+    .max(120)
+    .optional()
+    .transform((value) => value || null),
 });
 
 /* -------------------------------- rooms -------------------------------- */

@@ -36,7 +36,7 @@ test("full voting workflow works end to end", async ({ browser }) => {
   await adminPage.waitForURL("**/admin");
 
   // ---- create a room that any participant can join with the code
-  await adminPage.getByRole("link", { name: "Rooms" }).click();
+  await adminPage.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Rooms" }).click();
   await adminPage.getByLabel("Room name").fill(ROOM_NAME);
   await adminPage.getByLabel("Access mode").selectOption("OPEN_WITH_CODE");
   await adminPage.getByRole("button", { name: "Create room" }).click();
@@ -59,9 +59,9 @@ test("full voting workflow works end to end", async ({ browser }) => {
   expect(joinCode).toMatch(/^[A-Z2-9]{6,8}$/);
 
   // ---- admin presents team 1 on the live dashboard (round is PENDING)
-  await adminPage.getByRole("link", { name: "Open live dashboard →" }).click();
+  await adminPage.getByRole("link", { name: "Open live room" }).click();
   await adminPage.waitForSelector("[data-testid=presenting-team]");
-  expect(await adminPage.locator("[data-testid=presenting-team]").textContent()).toBe("— none selected —");
+  expect(await adminPage.locator("[data-testid=presenting-team]").textContent()).toBe("No team selected");
   await adminPage.getByLabel("Select presenting team").selectOption({ label: "1. Team Alpha" });
   await adminPage.getByRole("button", { name: "Present this team" }).click();
   await adminPage.waitForSelector("[data-testid=open-voting]", { timeout: 30_000 });
@@ -101,7 +101,7 @@ test("full voting workflow works end to end", async ({ browser }) => {
   await voterPage.waitForSelector("[data-testid=voting-closed]");
 
   // ---- results: publish, then export summary CSV
-  await adminPage.getByRole("link", { name: "Results →" }).click();
+  await adminPage.getByRole("link", { name: "Results", exact: true }).click();
   await adminPage.waitForSelector("[data-testid=publish-results]");
   await adminPage.getByTestId("publish-results").click();
   await adminPage.waitForSelector("text=Results visibility updated");

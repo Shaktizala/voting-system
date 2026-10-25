@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/Auth";
 import { Button, Card, ErrorBox, LabelledInput } from "../components/ui";
 import { AuthLayout } from "../components/AuthLayout";
-import { IconCheck, IconEye, IconEyeOff, IconKey } from "../components/icons";
+import { IconCheck, IconEye, IconEyeOff, } from "../components/icons";
 import { api, ApiError } from "../lib/api";
 
 export default function ChangePassword() {
@@ -41,12 +41,8 @@ export default function ChangePassword() {
 
   return (
     <AuthLayout>
-      <div className="mb-7">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-gold-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.15em] text-gold-700 ring-1 ring-inset ring-gold-200">
-          <IconKey size={12} />
-          One quick step
-        </span>
-        <h1 className="mt-4 font-display text-[2rem] font-semibold leading-tight tracking-tight text-ink-950">
+      <div className="mb-5">
+        <h1 className="text-[22px] font-semibold leading-tight text-ink-950">
           Set a new password
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-ink-500">
@@ -55,7 +51,7 @@ export default function ChangePassword() {
         </p>
       </div>
 
-      <Card className="p-5 shadow-lift sm:p-6">
+      <Card className="p-5 sm:p-6">
         <form onSubmit={submit} className="space-y-4">
           <LabelledInput
             label="Temporary password"

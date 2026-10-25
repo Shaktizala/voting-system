@@ -2,9 +2,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth, type AuthUser } from "../contexts/Auth";
 import { useRealtime } from "../contexts/Realtime";
-import { BrandLockup, BrandMark } from "./Brand";
+import { BrandLockup } from "./Brand";
 import {
-  IconActivity,
   IconAudit,
   IconChart,
   IconClose,
@@ -14,7 +13,6 @@ import {
   IconRooms,
   IconTeams,
   IconUsers,
-  IconWifi,
 } from "./icons";
 
 /* --------------------------------- nav ---------------------------------- */
@@ -41,7 +39,7 @@ export function NavLinkItem({ to, children }: { to: string; children: ReactNode 
       className={({ isActive }) =>
         `rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
           isActive
-            ? "bg-ink-900 text-white shadow-sm"
+            ? "bg-ink-200/70 text-ink-950"
             : "text-ink-600 hover:bg-ink-900/[0.055] hover:text-ink-900"
         }`
       }
@@ -51,33 +49,19 @@ export function NavLinkItem({ to, children }: { to: string; children: ReactNode 
   );
 }
 
-export function ConnectionDot({
-  dark = false,
-  compact = false,
-}: {
-  dark?: boolean;
-  compact?: boolean;
-}) {
+export function ConnectionDot({ compact = false }: { compact?: boolean }) {
   const { connected } = useRealtime();
   return (
     <span
       role="status"
-      className={`inline-flex items-center gap-2 text-[11px] font-medium ${
-        dark ? "text-white/55" : "text-ink-500"
-      }`}
-      title={connected ? "Realtime connected" : "Realtime offline — polling fallback active"}
+      className="inline-flex items-center gap-2 text-xs text-ink-500"
+      title={connected ? "Live updates connected" : "Live updates offline. Refreshing every few seconds instead"}
     >
-      <span className="relative flex h-2 w-2" aria-hidden="true">
-        {connected && (
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-jade-400 opacity-60" />
-        )}
-        <span
-          className={`relative inline-flex h-2 w-2 rounded-full ${
-            connected ? "bg-jade-500" : "bg-gold-500"
-          }`}
-        />
-      </span>
-      {!compact && (connected ? "Realtime live" : "Reconnecting…")}
+      <span
+        aria-hidden="true"
+        className={`h-2 w-2 shrink-0 rounded-full ${connected ? "bg-jade-600" : "bg-gold-500"}`}
+      />
+      {compact ? <span className="sr-only">{connected ? "Live" : "Reconnecting"}</span> : connected ? "Live updates on" : "Reconnecting…"}
     </span>
   );
 }
@@ -127,15 +111,15 @@ export function Shell({ children }: { children: ReactNode }) {
 
   const items: NavItem[] = isAdmin
     ? [
-        { to: "/admin", label: "Dashboard", icon: <IconDashboard size={18} />, end: true },
-        { to: "/admin/participants", label: "Participants", icon: <IconUsers size={18} /> },
-        { to: "/admin/teams", label: "Teams", icon: <IconTeams size={18} /> },
-        { to: "/admin/rooms", label: "Rooms", icon: <IconRooms size={18} /> },
-        { to: "/admin/audit", label: "Audit log", icon: <IconAudit size={18} /> },
+        { to: "/admin", label: "Overview", icon: <IconDashboard size={16} />, end: true },
+        { to: "/admin/participants", label: "Participants", icon: <IconUsers size={16} /> },
+        { to: "/admin/teams", label: "Teams", icon: <IconTeams size={16} /> },
+        { to: "/admin/rooms", label: "Rooms", icon: <IconRooms size={16} /> },
+        { to: "/admin/audit", label: "Audit log", icon: <IconAudit size={16} /> },
       ]
     : [
-        { to: "/rooms", label: "My rooms", icon: <IconRooms size={18} /> },
-        { to: "/my-results", label: "My results", icon: <IconChart size={18} /> },
+        { to: "/rooms", label: "My rooms", icon: <IconRooms size={16} /> },
+        { to: "/my-results", label: "My results", icon: <IconChart size={16} /> },
       ];
 
   const handleLogout = async () => {
@@ -146,169 +130,96 @@ export function Shell({ children }: { children: ReactNode }) {
     }
   };
 
+  const navGroup = (
+    <>
+      <p className="px-3 text-xs text-ink-500">{isAdmin ? "Admin" : "Your rooms and results"}</p>
+      <nav aria-label="Main navigation" className="mt-2 space-y-0.5">
+        {items.map((item) => (
+          <SidebarNavItem key={item.to} item={item} />
+        ))}
+      </nav>
+    </>
+  );
+
   return (
-    <div className="min-h-screen lg:pl-[272px]">
+    <div className="min-h-screen bg-frame lg:pl-[228px]">
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[70] focus:rounded-xl focus:bg-ink-950 focus:px-4 focus:py-2.5 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lift"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[70] focus:rounded-lg focus:bg-ink-950 focus:px-4 focus:py-2.5 focus:text-sm focus:font-semibold focus:text-white"
       >
         Skip to content
       </a>
 
-      {/* desktop sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[272px] flex-col overflow-hidden bg-ink-950 text-white lg:flex">
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-          <div className="absolute -left-24 -top-24 h-64 w-64 rounded-full bg-brand-600/30 blur-3xl" />
-          <div className="absolute -bottom-32 -right-20 h-72 w-72 rounded-full bg-jade-500/15 blur-3xl" />
-          <div
-            className="absolute inset-0 opacity-[0.05]"
-            style={{
-              backgroundImage:
-                "linear-gradient(to right, white 1px, transparent 1px), linear-gradient(to bottom, white 1px, transparent 1px)",
-              backgroundSize: "48px 48px",
-            }}
-          />
+      {/* desktop: the sidebar is the frame's vertical arm, on the frame tint, no rule */}
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[228px] flex-col bg-frame px-3 pb-3 pt-4 lg:flex">
+        <div className="px-2">
+          <BrandLockup />
         </div>
-
-        <div className="relative flex h-full flex-col px-4 py-6">
-          <div className="px-2">
-            <BrandLockup dark />
-          </div>
-
-          <div className="mt-9 flex-1 overflow-y-auto scrollbar-slim">
-            <p className="px-3 text-[9px] font-bold uppercase tracking-[0.22em] text-white/30">
-              {isAdmin ? "Admin workspace" : "Your workspace"}
-            </p>
-            <nav aria-label="Main navigation" className="mt-3 space-y-1">
-              {items.map((item) => (
-                <SidebarNavItem key={item.to} item={item} />
-              ))}
-            </nav>
-
-            <div className="mt-8 rounded-2xl border border-white/10 bg-white/[0.045] p-3.5">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/35">
-                  Connection
-                </span>
-                <IconWifi size={14} className="text-white/30" />
-              </div>
-              <div className="mt-2">
-                <ConnectionDot dark />
-              </div>
-              <p className="mt-2 text-[11px] leading-relaxed text-white/35">
-                Updates stream live. A polling fallback keeps things fresh if the socket drops.
-              </p>
-            </div>
-
-            <div className="mt-3 rounded-2xl border border-brand-400/20 bg-gradient-to-br from-brand-500/15 to-jade-500/10 p-3.5">
-              <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-brand-200">
-                <IconActivity size={13} />
-                Everything audited
-              </div>
-              <p className="mt-2 text-[11px] leading-relaxed text-white/45">
-                Every round, vote change, and publish action is recorded for a clean review trail.
-              </p>
-            </div>
-          </div>
-
-          <UserPanel user={user} onLogout={handleLogout} />
+        <div className="mt-7 flex-1 overflow-y-auto scrollbar-slim">{navGroup}</div>
+        <div className="px-3 pb-2">
+          <ConnectionDot />
         </div>
+        <UserPanel user={user} onLogout={handleLogout} />
       </aside>
 
-      {/* mobile header */}
-      <header className="sticky top-0 z-30 border-b border-line/80 bg-white/80 backdrop-blur-xl lg:hidden">
-        <div className="flex h-16 items-center justify-between gap-3 px-4 sm:px-6">
+      {/* phone + tablet: the frame folds to a 48px bar on the frame tint */}
+      <header className="sticky top-0 z-30 bg-frame lg:hidden">
+        <div className="flex h-12 items-center justify-between gap-3 px-3 sm:px-5">
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setDrawerOpen(true)}
               aria-label="Open navigation"
-              className="grid h-10 w-10 place-items-center rounded-xl border border-line bg-white text-ink-700 shadow-sm transition hover:bg-ink-50 focus-visible:ring-4 focus-visible:ring-brand-500/20"
+              className="grid h-11 w-11 place-items-center rounded-lg text-ink-700 transition-colors hover:bg-ink-100 focus-visible:ring-2 focus-visible:ring-brand-500"
             >
-              <IconMenu size={19} />
+              <IconMenu size={20} />
             </button>
-            <BrandLockup compact />
-            <span className="font-display text-[15px] font-semibold tracking-tight text-ink-950 sm:hidden">
-              TeamVote
-            </span>
+            <BrandLockup />
           </div>
-          <div className="flex items-center gap-3">
-            <span className="hidden sm:block">
-              <ConnectionDot />
-            </span>
-            <span className="hidden h-4 w-px bg-line sm:block" aria-hidden="true" />
-            <span className="text-right">
-              <span className="block max-w-[9rem] truncate text-xs font-semibold text-ink-800">
-                {user.name}
-              </span>
-              <span className="block text-[10px] uppercase tracking-[0.12em] text-ink-400">
-                {user.role.toLowerCase()}
-              </span>
-            </span>
-            <span className="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-brand-400 to-brand-700 text-[11px] font-bold text-white shadow-glow">
-              {initials(user.name)}
-            </span>
-          </div>
+          <ConnectionDot compact />
         </div>
       </header>
 
-      {/* mobile drawer */}
+      {/* menu sheet: nav and account */}
       {drawerOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          <div
-            className="absolute inset-0 animate-fade-in bg-ink-950/55 backdrop-blur-sm"
-            onClick={() => setDrawerOpen(false)}
-            aria-hidden="true"
-          />
+          <div className="absolute inset-0 bg-ink-950/45" onClick={() => setDrawerOpen(false)} aria-hidden="true" />
           <aside
             role="dialog"
             aria-modal="true"
             aria-label="Navigation"
-            className="absolute inset-y-0 left-0 flex w-[300px] max-w-[86vw] animate-drawer-in flex-col overflow-hidden bg-ink-950 px-4 py-5 text-white shadow-2xl"
+            className="absolute inset-y-0 left-0 flex w-[300px] max-w-[86vw] animate-drawer-in flex-col bg-frame px-3 pb-3 pt-3 shadow-lift"
           >
-            <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-              <div className="absolute -left-20 -top-20 h-56 w-56 rounded-full bg-brand-600/35 blur-3xl" />
-              <div className="absolute -bottom-24 -right-16 h-64 w-64 rounded-full bg-jade-500/15 blur-3xl" />
-            </div>
-            <div className="relative flex items-center justify-between gap-3 px-2">
-              <BrandLockup dark to="/" />
+            <div className="flex items-center justify-between gap-3 pl-2">
+              <BrandLockup to="/" />
               <button
                 ref={closeButtonRef}
                 type="button"
                 onClick={() => setDrawerOpen(false)}
                 aria-label="Close navigation"
-                className="grid h-9 w-9 place-items-center rounded-xl border border-white/10 bg-white/[0.06] text-white/70 transition hover:bg-white/10 hover:text-white focus-visible:ring-4 focus-visible:ring-brand-500/30"
+                className="grid h-11 w-11 place-items-center rounded-lg text-ink-600 transition-colors hover:bg-ink-100 focus-visible:ring-2 focus-visible:ring-brand-500"
               >
-                <IconClose size={17} />
+                <IconClose size={18} />
               </button>
             </div>
-
-            <div className="relative mt-8 flex-1 overflow-y-auto scrollbar-slim">
-              <p className="px-3 text-[9px] font-bold uppercase tracking-[0.22em] text-white/30">
-                {isAdmin ? "Admin workspace" : "Your workspace"}
-              </p>
-              <nav aria-label="Main navigation" className="mt-3 space-y-1">
-                {items.map((item) => (
-                  <SidebarNavItem key={item.to} item={item} />
-                ))}
-              </nav>
-              <div className="mt-6">
-                <ConnectionDot dark />
-              </div>
+            <div className="mt-6 flex-1 overflow-y-auto scrollbar-slim">{navGroup}</div>
+            <div className="px-3 pb-2">
+              <ConnectionDot />
             </div>
-
             <UserPanel user={user} onLogout={handleLogout} />
           </aside>
         </div>
       )}
 
-      {/* content */}
-      <main
-        id="main-content"
-        className="mx-auto w-full max-w-[1440px] px-4 pb-16 pt-6 sm:px-6 lg:px-10 lg:pb-12 lg:pt-9"
-      >
-        <div className="page-enter">{children}</div>
-      </main>
+      {/* the white sheet: inset 8px from the window's top, right and bottom, 1px edge, no shadow */}
+      <div className="lg:py-2 lg:pr-2">
+        <main
+          id="main-content"
+          className="min-h-[calc(100vh-3rem)] bg-white px-4 pb-16 pt-5 sm:px-6 lg:min-h-[calc(100vh-1rem)] lg:rounded-2xl lg:border lg:border-line lg:px-8 lg:pb-10 lg:pt-7"
+        >
+          <div className="mx-auto w-full max-w-[1240px]">{children}</div>
+        </main>
+      </div>
     </div>
   );
 }
@@ -319,30 +230,13 @@ function SidebarNavItem({ item }: { item: NavItem }) {
       to={item.to}
       end={item.end}
       className={({ isActive }) =>
-        `group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
-          isActive
-            ? "bg-white/[0.09] text-white shadow-[inset_0_1px_0_rgb(255_255_255_/_0.06)] ring-1 ring-inset ring-white/10"
-            : "text-white/50 hover:bg-white/[0.055] hover:text-white"
+        `flex h-9 items-center gap-2.5 rounded-lg px-3 text-sm transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 ${
+          isActive ? "bg-ink-200/70 font-medium text-ink-950" : "text-ink-600 hover:bg-ink-100 hover:text-ink-900"
         }`
       }
     >
-      {({ isActive }) => (
-        <>
-          <span
-            aria-hidden="true"
-            className={`absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full bg-gradient-to-b from-brand-300 to-jade-300 transition-opacity ${
-              isActive ? "opacity-100" : "opacity-0"
-            }`}
-          />
-          <span className={isActive ? "text-brand-200" : "text-white/40 group-hover:text-white/70"}>
-            {item.icon}
-          </span>
-          <span className="truncate">{item.label}</span>
-          {isActive && (
-            <span aria-hidden="true" className="ml-auto h-1.5 w-1.5 rounded-full bg-jade-300" />
-          )}
-        </>
-      )}
+      <span className="text-ink-500">{item.icon}</span>
+      <span className="truncate">{item.label}</span>
     </NavLink>
   );
 }
@@ -354,29 +248,25 @@ function UserPanel({
   user: AuthUser;
   onLogout: () => Promise<void>;
 }) {
+  const role = { ADMIN: "Admin", MODERATOR: "Moderator", PARTICIPANT: "Participant" }[user.role] ?? user.role;
   return (
-    <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.055] p-2.5">
-      <div className="flex items-center gap-3 px-1.5 py-1">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-brand-300 to-brand-600 text-[11px] font-bold text-white shadow-glow">
-          {initials(user.name)}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px] font-semibold text-white">{user.name}</span>
-          <span className="block text-[10px] uppercase tracking-[0.14em] text-white/40">
-            {user.role.toLowerCase()}
-          </span>
-        </span>
-        <button
-          type="button"
-          onClick={onLogout}
-          aria-label="Log out"
-          title="Log out"
-          className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-white/45 transition hover:bg-white/10 hover:text-white focus-visible:ring-4 focus-visible:ring-brand-500/30"
-        >
-          <IconLogout size={16} />
-        </button>
-      </div>
+    <div className="mt-2 flex items-center gap-2.5 rounded-lg px-2 py-2">
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-ink-200 text-xs font-semibold text-ink-800">
+        {initials(user.name)}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[13px] font-medium text-ink-900">{user.name}</span>
+        <span className="block text-xs text-ink-500">{role}</span>
+      </span>
+      <button
+        type="button"
+        onClick={onLogout}
+        aria-label="Log out"
+        title="Log out"
+        className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-ink-500 transition-colors hover:bg-ink-100 hover:text-ink-900 focus-visible:ring-2 focus-visible:ring-brand-500"
+      >
+        <IconLogout size={16} />
+      </button>
     </div>
   );
 }
-

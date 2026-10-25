@@ -3,26 +3,36 @@
 /* ------------------------------------------------------------------ */
 /*  TeamVote design tokens                                             */
 /* ------------------------------------------------------------------ */
+/*
+ * Framed-sheet app style (tasteskill, seed 634805981), brand violet kept.
+ * Face: the chrome frame is one low-chroma step of TeamVote's violet; the work
+ * sits on white. Colour budget under ~3%: violet goes on data (turnout, the
+ * selected score) and the focus ring, never on chrome. One face: IBM Plex Sans.
+ */
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-display: "Sora", "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace; /* join codes and IDs only */
 
-  --color-canvas: #f5f4fb;
-  --color-line: #e7e4f1;
+  --color-frame: #f6f5f9;   /* sidebar + top bar, one tinted L */
+  --color-canvas: #f6f5f9;
+  --color-line: #e9e8ee;    /* sheet and card edges */
+  --color-rule: #f1f0f4;    /* row rules, one step lighter */
+  --color-control: #d4d3dc; /* control borders, one step darker */
   --color-surface: #ffffff;
 
-  --color-ink-50: #f7f7fb;
-  --color-ink-100: #eeedf5;
-  --color-ink-200: #dddbea;
-  --color-ink-300: #c2bfd5;
-  --color-ink-400: #928da9;
-  --color-ink-500: #6d6884;
-  --color-ink-600: #565169;
-  --color-ink-700: #454156;
-  --color-ink-800: #2d2a3b;
-  --color-ink-900: #1b1928;
-  --color-ink-950: #0d0c16;
+  /* neutral ink, barely tinted; every tier that carries words is >= 4.5:1 on white */
+  --color-ink-50: #f8f8fa;
+  --color-ink-100: #efeff3;
+  --color-ink-200: #e1e0e7;
+  --color-ink-300: #c6c5cf;
+  --color-ink-400: #6c6b78;
+  --color-ink-500: #5d5c68;
+  --color-ink-600: #4b4a55;
+  --color-ink-700: #393843;
+  --color-ink-800: #26252e;
+  --color-ink-900: #18171e;
+  --color-ink-950: #111015;
 
   --color-brand-50: #f2f1ff;
   --color-brand-100: #e7e4ff;
@@ -79,25 +89,18 @@
   --color-ocean-800: #17539f;
   --color-ocean-900: #18477d;
 
-  --shadow-card: 0 1px 2px rgb(20 16 50 / 0.04), 0 14px 36px -20px rgb(43 33 95 / 0.22);
-  --shadow-lift: 0 2px 4px rgb(20 16 50 / 0.05), 0 26px 54px -24px rgb(43 33 95 / 0.3);
-  --shadow-glow: 0 18px 40px -18px rgb(108 92 231 / 0.55);
-  --shadow-glow-mint: 0 18px 40px -18px rgb(22 185 138 / 0.5);
+  /* surfaces are flat; only what floats (dialogs, menus, toasts) casts a shadow */
+  --shadow-card: 0 0 #0000;
+  --shadow-lift: 0 16px 40px -16px rgb(17 16 21 / 0.22);
+  --shadow-glow: 0 0 #0000;
+  --shadow-glow-mint: 0 0 #0000;
 
-  --animate-fade-up: fade-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-fade-in: fade-in 0.3s ease-out both;
   --animate-scale-in: scale-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-toast-in: toast-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
-  --animate-pulse-soft: pulse-soft 2.4s ease-in-out infinite;
-  --animate-float: float 7s ease-in-out infinite;
   --animate-drawer-in: drawer-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
-  --animate-shimmer: shimmer 1.7s linear infinite;
 }
 
-@keyframes fade-up {
-  from { opacity: 0; transform: translateY(14px); }
-  to { opacity: 1; transform: translateY(0); }
-}
 @keyframes fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -110,20 +113,9 @@
   from { opacity: 0; transform: translateY(12px) scale(0.97); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
-@keyframes pulse-soft {
-  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgb(22 185 138 / 0.45); }
-  50% { opacity: 0.75; box-shadow: 0 0 0 5px rgb(22 185 138 / 0); }
-}
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
-}
 @keyframes drawer-in {
   from { transform: translateX(-100%); }
   to { transform: translateX(0); }
-}
-@keyframes shimmer {
-  100% { transform: translateX(100%); }
 }
 
 /* ------------------------------------------------------------------ */
@@ -138,11 +130,7 @@
 
   body {
     min-height: 100vh;
-    background-color: var(--color-canvas);
-    background-image:
-      radial-gradient(58rem 38rem at 108% -12%, rgb(108 92 231 / 0.1), transparent 62%),
-      radial-gradient(46rem 30rem at -12% -4%, rgb(22 185 138 / 0.07), transparent 60%);
-    background-attachment: fixed;
+    background-color: var(--color-frame);
     color: var(--color-ink-900);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
@@ -151,8 +139,10 @@
 
   h1, h2, h3, h4 {
     font-family: var(--font-display);
-    letter-spacing: -0.015em;
   }
+
+  /* figures that are compared or update live never jitter */
+  .num, td, th { font-variant-numeric: tabular-nums; }
 
   ::selection {
     background: rgb(108 92 231 / 0.22);
@@ -182,29 +172,10 @@
 /* ------------------------------------------------------------------ */
 /*  Reusable UI details                                                */
 /* ------------------------------------------------------------------ */
-.page-enter {
-  animation: var(--animate-fade-up);
-}
 
-.text-gradient {
-  background: linear-gradient(100deg, #b3a8ff 0%, #8d7cff 38%, #63e0b9 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
+/* loading: flat bars at the real size of what they stand for, no shimmer */
 .skeleton {
-  position: relative;
-  overflow: hidden;
-  background-color: #eae8f3;
-}
-.skeleton::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.7), transparent);
-  animation: var(--animate-shimmer);
+  background-color: var(--color-ink-100);
 }
 
 .scrollbar-slim {
@@ -223,9 +194,7 @@
 
 /* Native dialog --------------------------------------------------- */
 dialog::backdrop {
-  background: rgb(13 12 22 / 0.55);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  background: rgb(17 16 21 / 0.45);
 }
 dialog[open] {
   animation: var(--animate-scale-in);
@@ -243,16 +212,16 @@ dialog[open] {
 .range-brand::-webkit-slider-runnable-track {
   height: 0.5rem;
   border-radius: 999px;
-  background: linear-gradient(
+  background: linear-gradient( /* taste-skill-ignore: two flat tones split at the chosen score, not a decorative gradient */
     90deg,
     var(--color-brand-500) 0 var(--range-fill, 0%),
-    #e7e4f1 var(--range-fill, 0%) 100%
+    var(--color-ink-100) var(--range-fill, 0%) 100%
   );
 }
 .range-brand::-moz-range-track {
   height: 0.5rem;
   border-radius: 999px;
-  background: #e7e4f1;
+  background: var(--color-ink-100);
 }
 .range-brand::-moz-range-progress {
   height: 0.5rem;
@@ -268,8 +237,7 @@ dialog[open] {
   border-radius: 999px;
   border: 3px solid var(--color-brand-500);
   background: #fff;
-  box-shadow: 0 2px 8px rgb(43 33 95 / 0.22);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition: transform 0.15s ease;
 }
 .range-brand::-moz-range-thumb {
   width: 1.2rem;
@@ -277,7 +245,6 @@ dialog[open] {
   border-radius: 999px;
   border: 3px solid var(--color-brand-500);
   background: #fff;
-  box-shadow: 0 2px 8px rgb(43 33 95 / 0.22);
 }
 .range-brand:hover::-webkit-slider-thumb { transform: scale(1.08); }
 .range-brand:active::-webkit-slider-thumb {

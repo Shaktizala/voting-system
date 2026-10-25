@@ -1,77 +1,106 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
-import { useAuth } from "../../contexts/Auth";
-import {
-  buttonClass,
-  Card,
-  EmptyState,
-  PageTitle,
-  SectionHeading,
-  Skeleton,
-  StatCard,
-  StatusBadge,
-} from "../../components/ui";
-import { ConnectionDot } from "../../components/Shell";
-import {
-  IconActivity,
-  IconArrowUpRight,
-  IconAudit,
-  IconChart,
-  IconChevronRight,
-  IconPlus,
-  IconRooms,
-  IconSparkles,
-  IconTeams,
-  IconUsers,
-} from "../../components/icons";
+import { buttonClass, PageTitle, Skeleton, StatCard, StatStrip, StatusBadge } from "../../components/ui";
+import { IconPlus } from "../../components/icons";
 
-const QUICK_ACTIONS = [
-  {
-    to: "/admin/participants",
-    label: "Add participants",
-    description: "Create accounts or bulk import",
-    icon: <IconUsers size={17} />,
-  },
-  {
-    to: "/admin/teams",
-    label: "Manage teams",
-    description: "Projects, members, and details",
-    icon: <IconTeams size={17} />,
-  },
-  {
-    to: "/admin/rooms",
-    label: "Room setup",
-    description: "Categories, teams, and members",
-    icon: <IconRooms size={17} />,
-  },
-  {
-    to: "/admin/audit",
-    label: "Review the audit log",
-    description: "Every important action, recorded",
-    icon: <IconAudit size={17} />,
-  },
-];
+/*
+ * Overview. The screen's question: "Which room is live, and what needs me?"
+ * The rooms table answers it and is the largest block; turnout on the live
+ * round is the one data element in the brand hue. The rail lists real admin
+ * jobs, then recent activity.
+ * Grid: 1fr + 384px rail, 24px gap (dealt overview pattern).
+ */
+
+interface Room {
+  id: string;
+  name: string;
+  status: string;
+  publishedAt: string | null;
+  _count: { members: number; roomTeams: number; categories: number };
+}
+interface Round {
+  id: string;
+  teamId: string;
+  status: string;
+  createdAt?: string;
+}
+interface Snapshot {
+  teams: { teamId: string; name: string }[];
+  rounds: Round[];
+}
+interface Progress {
+  votedCount: number;
+  eligibleCount: number;
+}
+
+const LIVE = ["PENDING", "OPEN", "PAUSED"];
 
 export default function AdminDashboard() {
-  const { user } = useAuth();
-  const roomsQ = useQuery({ queryKey: ["rooms"], queryFn: () => api<{ rooms: any[] }>("/rooms") });
+  const roomsQ = useQuery({ queryKey: ["rooms"], queryFn: () => api<{ rooms: Room[] }>("/rooms") });
   const usersQ = useQuery({ queryKey: ["participants"], queryFn: () => api<{ participants: any[] }>("/participants") });
   const teamsQ = useQuery({ queryKey: ["teams"], queryFn: () => api<{ teams: any[] }>("/teams") });
+  const auditQ = useQuery({ queryKey: ["audit"], queryFn: () => api<{ logs: any[] }>("/audit") });
 
   const rooms = roomsQ.data?.rooms ?? [];
-  const activeRooms = rooms.filter((room) => room.status === "ACTIVE").length;
-  const membershipCount = rooms.reduce((sum: number, room: any) => sum + (room._count?.members ?? 0), 0);
-  const firstName = user?.name?.split(" ")[0];
+  // active rooms first, then drafts, then the rest; archived rooms stay on the Rooms screen
+  const order = { ACTIVE: 0, DRAFT: 1, CLOSED: 2 } as Record<string, number>;
+  const shown = rooms.filter((r) => r.status !== "ARCHIVED").sort((a, b) => (order[a.status] ?? 3) - (order[b.status] ?? 3));
+  const active = shown.filter((r) => r.status === "ACTIVE");
+
+  const snapshots = useQueries({
+    queries: active.map((room) => ({
+      queryKey: ["snapshot", room.id],
+      queryFn: () => api<Snapshot>(`/rooms/${room.id}/full`),
+      refetchInterval: 15_000,
+    })),
+  });
+  const liveRound = (roomId: string) => {
+    const i = active.findIndex((r) => r.id === roomId);
+    const snap = i >= 0 ? snapshots[i]?.data : undefined;
+    const round = snap?.rounds.find((r) => LIVE.includes(r.status));
+    return round ? { round, team: snap!.teams.find((t) => t.teamId === round.teamId)?.name ?? "—" } : null;
+  };
+  const progress = useQueries({
+    queries: active.map((room) => {
+      const live = liveRound(room.id);
+      return {
+        queryKey: ["progress", room.id, live?.round.id],
+        queryFn: () => api<Progress>(`/rooms/${room.id}/rounds/${live!.round.id}/progress`),
+        enabled: !!live && live.round.status !== "PENDING",
+        refetchInterval: 15_000,
+      };
+    }),
+  });
+
+  const people = usersQ.data?.participants ?? [];
+  const activePeople = people.filter((p) => p.status === "ACTIVE").length;
+  const tempPasswords = people.filter((p) => p.status === "ACTIVE" && p.mustChangePassword).length;
+  const drafts = shown.filter((r) => r.status === "DRAFT");
+  const unpublished = active.filter((r) => !r.publishedAt);
+
+  const votingNow = active
+    .map((r) => ({ room: r, live: liveRound(r.id) }))
+    .filter((x) => x.live?.round.status === "OPEN");
+  const finding = roomsQ.isLoading
+    ? "Loading rooms…"
+    : votingNow.length
+      ? `Voting is open in ${votingNow.map((x) => `${x.room.name} (${x.live!.team})`).join(", ")}.`
+      : active.length
+        ? `${active.length} ${active.length === 1 ? "room is" : "rooms are"} active. No round is open right now.`
+        : "No room is active. Activate a room to start a round.";
+
+  const jobs = [
+    drafts.length > 0 && { to: "/admin/rooms", text: `${drafts.length} draft ${drafts.length === 1 ? "room" : "rooms"} to activate` },
+    unpublished.length > 0 && { to: `/room/${unpublished[0].id}/results`, text: `Results not yet published in ${unpublished.map((r) => r.name).join(", ")}` },
+    tempPasswords > 0 && { to: "/admin/participants", text: `${tempPasswords} ${tempPasswords === 1 ? "person hasn't" : "people haven't"} replaced a temporary password` },
+  ].filter(Boolean) as { to: string; text: string }[];
 
   return (
     <>
       <PageTitle
-        eyebrow="Overview"
-        title="Admin dashboard"
-        subtitle={`${
-          firstName ? `Welcome back, ${firstName}. ` : ""
-        }Rooms, participants, and teams at a glance.`}
+        title="Overview"
+        subtitle={finding}
         actions={
           <Link to="/admin/rooms" className={buttonClass("primary")}>
             <IconPlus size={16} />
@@ -80,210 +109,242 @@ export default function AdminDashboard() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Rooms"
-          value={roomsQ.isLoading ? <Skeleton className="h-8 w-12" /> : rooms.length}
-          hint={`${activeRooms} active right now`}
-          icon={<IconRooms size={20} />}
-          tone="brand"
-        />
-        <StatCard
-          label="Participants"
-          value={
-            usersQ.isLoading ? (
-              <Skeleton className="h-8 w-12" />
-            ) : (
-              usersQ.data?.participants.length ?? 0
-            )
-          }
-          hint="Across the organization"
-          icon={<IconUsers size={20} />}
-          tone="ocean"
-        />
-        <StatCard
-          label="Teams"
-          value={teamsQ.isLoading ? <Skeleton className="h-8 w-12" /> : teamsQ.data?.teams.length ?? 0}
-          hint="Ready for evaluation"
-          icon={<IconTeams size={20} />}
-          tone="jade"
-        />
-        <StatCard
-          label="Room memberships"
-          value={roomsQ.isLoading ? <Skeleton className="h-8 w-12" /> : membershipCount}
-          hint="Assignments in active rooms"
-          icon={<IconActivity size={20} />}
-          tone="gold"
-        />
+      <div className="mb-6">
+        <StatStrip columns={3}>
+          <StatCard
+            label="Active rooms"
+            value={roomsQ.isLoading ? <Skeleton className="h-7 w-10" /> : active.length}
+            hint={roomsQ.isLoading ? undefined : `of ${shown.length} ${shown.length === 1 ? "room" : "rooms"}`}
+          />
+          <StatCard
+            label="People"
+            value={usersQ.isLoading ? <Skeleton className="h-7 w-10" /> : activePeople}
+            hint={usersQ.isLoading ? undefined : activePeople === people.length ? "all accounts active" : `active, of ${people.length} accounts`}
+          />
+          <StatCard
+            label="Teams"
+            value={teamsQ.isLoading ? <Skeleton className="h-7 w-10" /> : (teamsQ.data?.teams.length ?? 0)}
+            hint="in the organisation"
+          />
+        </StatStrip>
       </div>
 
-      <div className="mt-7 grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
-        <section>
-          <SectionHeading
-            title="Evaluation rooms"
-            description="Jump into a room to run the live round."
-            count={rooms.length}
-            action={
-              <Link
-                to="/admin/rooms"
-                className="inline-flex items-center gap-1 text-sm font-semibold text-brand-600 transition hover:text-brand-700"
-              >
-                View all
-                <IconChevronRight size={15} />
-              </Link>
-            }
-          />
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_384px]">
+        <section aria-labelledby="rooms-heading" className="min-w-0">
+          <div className="mb-2 flex items-baseline justify-between gap-3">
+            <h2 id="rooms-heading" className="text-base font-semibold text-ink-950">
+              Rooms
+            </h2>
+            <Link to="/admin/rooms" className="text-sm text-ink-700 underline-offset-4 hover:underline">
+              All rooms
+            </Link>
+          </div>
 
-          {roomsQ.isLoading ? (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {Array.from({ length: 4 }).map((_, index) => (
-                <Skeleton key={index} className="h-[10.5rem] rounded-2xl" />
-              ))}
-            </div>
-          ) : rooms.length === 0 ? (
-            <EmptyState
-              title="No rooms yet"
-              hint="Create a room to group your teams, categories, and voting rounds."
-              icon={<IconRooms size={22} />}
-              action={
-                <Link to="/admin/rooms" className={buttonClass("primary")}>
-                  <IconPlus size={16} />
-                  Create your first room
-                </Link>
-              }
-            />
-          ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {rooms.map((room) => (
-                <Link
-                  key={room.id}
-                  to={`/admin/rooms/${room.id}`}
-                  className="group relative flex min-h-[10.5rem] flex-col overflow-hidden rounded-2xl border border-line bg-white p-5 shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-lift"
-                >
-                  <span
-                    aria-hidden="true"
-                    className={`absolute inset-x-0 top-0 h-0.5 ${
-                      room.status === "ACTIVE"
-                        ? "bg-gradient-to-r from-jade-400 to-jade-200"
-                        : room.status === "CLOSED"
-                          ? "bg-gradient-to-r from-coral-400 to-coral-200"
-                          : "bg-gradient-to-r from-brand-400 to-brand-200"
-                    }`}
-                  />
-                  <div className="flex items-start justify-between gap-2">
-                    <StatusBadge status={room.status} />
-                    <span className="grid h-7 w-7 place-items-center rounded-lg bg-ink-50 text-ink-400 transition group-hover:bg-brand-50 group-hover:text-brand-600">
-                      <IconArrowUpRight size={14} />
-                    </span>
+          <div className="overflow-hidden rounded-[10px] border border-line">
+            {roomsQ.isLoading ? (
+              <div className="space-y-px">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="flex h-[72px] items-center gap-4 px-4">
+                    <Skeleton className="h-4 w-48" />
+                    <Skeleton className="ml-auto h-2 w-40" />
                   </div>
-                  <h3 className="mt-3 font-display text-[17px] font-semibold leading-snug text-ink-900 transition-colors group-hover:text-brand-700">
-                    {room.name}
-                  </h3>
-                  {room.description ? (
-                    <p className="mt-1 line-clamp-1 text-[13px] text-ink-500">{room.description}</p>
-                  ) : (
-                    <p className="mt-1 text-[13px] italic text-ink-400">No description</p>
-                  )}
-                  <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-1.5 pt-4 text-[11px] font-medium text-ink-500">
-                    <span className="inline-flex items-center gap-1.5">
-                      <IconUsers size={13} className="text-ink-400" />
-                      {room._count.members} participants
-                    </span>
-                    <span className="inline-flex items-center gap-1.5">
-                      <IconTeams size={13} className="text-ink-400" />
-                      {room._count.roomTeams} teams
-                    </span>
-                  </div>
+                ))}
+              </div>
+            ) : roomsQ.isError ? (
+              <p className="px-4 py-6 text-sm text-ink-700">
+                Couldn't load rooms.{" "}
+                <button type="button" className="font-medium underline underline-offset-4" onClick={() => roomsQ.refetch()}>
+                  Try again
+                </button>
+              </p>
+            ) : shown.length === 0 ? (
+              <p className="px-4 py-6 text-sm text-ink-700">
+                No rooms yet.{" "}
+                <Link to="/admin/rooms" className="font-medium underline underline-offset-4">
+                  Create the first room
                 </Link>
-              ))}
-            </div>
+              </p>
+            ) : (
+              <table className="w-full text-left text-sm">
+                <thead className="max-md:sr-only">
+                  <tr className="border-b border-line">
+                    <th scope="col" className="h-10 px-4 text-xs font-normal text-ink-500">Room</th>
+                    <th scope="col" className="h-10 px-4 text-xs font-normal text-ink-500">Presenting now</th>
+                    <th scope="col" className="h-10 w-[190px] px-4 text-xs font-normal text-ink-500">Turnout</th>
+                    <th scope="col" className="h-10 px-4 text-right text-xs font-normal text-ink-500">
+                      <span className="sr-only">Action</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {shown.slice(0, 6).map((room) => {
+                    const i = active.findIndex((r) => r.id === room.id);
+                    const live = room.status === "ACTIVE" ? liveRound(room.id) : null;
+                    const p = i >= 0 ? progress[i]?.data : undefined;
+                    return (
+                      <tr key={room.id} className="border-b border-rule last:border-0 max-md:flex max-md:flex-wrap max-md:items-center max-md:gap-x-3 max-md:gap-y-1 max-md:px-4 max-md:py-3">
+                        <td className="px-4 py-3.5 max-md:w-full max-md:p-0">
+                          <Link to={`/admin/rooms/${room.id}`} className="font-medium text-ink-950 hover:underline underline-offset-4">
+                            {room.name}
+                          </Link>
+                          <p className="num mt-0.5 whitespace-nowrap text-[13px] text-ink-500">
+                            {plural(room._count.members, "member")}, {plural(room._count.roomTeams, "team")}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3.5 max-md:p-0">
+                          {room.status !== "ACTIVE" ? (
+                            <StatusBadge status={room.status} />
+                          ) : live ? (
+                            <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                              <span className="whitespace-nowrap text-ink-900">{live.team}</span>
+                              <StatusBadge status={live.round.status} />
+                            </span>
+                          ) : (
+                            <span className="text-ink-500">Between rounds</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3.5 max-md:min-w-[180px] max-md:flex-1 max-md:p-0">
+                          {p ? (
+                            <Turnout voted={p.votedCount} eligible={p.eligibleCount} />
+                          ) : (
+                            <span className="text-ink-500" aria-label="No turnout">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3.5 text-right max-md:p-0">
+                          {room.status === "ACTIVE" && (
+                            <Link to={`/room/${room.id}`} className={buttonClass("secondary", "h-8 whitespace-nowrap px-3 text-[13px]")}>
+                              Open live room
+                            </Link>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+          {shown.length > 6 && (
+            <p className="mt-2 text-sm text-ink-500">
+              Showing 6 of {shown.length}.{" "}
+              <Link to="/admin/rooms" className="text-ink-800 underline underline-offset-4">View all rooms</Link>
+            </p>
           )}
         </section>
 
-        <aside className="space-y-4">
-          <Card className="p-0">
-            <div className="flex items-center justify-between gap-2 px-5 pb-1 pt-5">
-              <h2 className="font-display text-base font-semibold text-ink-900">Quick actions</h2>
-              <span className="rounded-full bg-ink-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-ink-500">
-                Shortcuts
-              </span>
+        <aside className="space-y-6">
+          <section aria-labelledby="jobs-heading">
+            <h2 id="jobs-heading" className="mb-2 text-base font-semibold text-ink-950">
+              Needs attention
+            </h2>
+            <div className="rounded-[10px] border border-line">
+              {jobs.length === 0 ? (
+                <p className="px-4 py-3.5 text-sm text-ink-700">Nothing waiting on you.</p>
+              ) : (
+                <ul>
+                  {jobs.map((job) => (
+                    <li key={job.text} className="border-b border-rule last:border-0">
+                      <Link to={job.to} className="block px-4 py-3 text-sm text-ink-900 transition-colors hover:bg-ink-50">
+                        {job.text}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
-            <div className="mt-3 border-t border-line">
-              {QUICK_ACTIONS.map((action) => (
-                <Link
-                  key={action.to}
-                  to={action.to}
-                  className="group flex items-center gap-3.5 border-b border-line/70 px-5 py-3.5 transition-colors last:border-b-0 hover:bg-brand-50/50"
-                >
-                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-ink-50 text-ink-500 ring-1 ring-inset ring-line transition group-hover:bg-white group-hover:text-brand-600 group-hover:ring-brand-100">
-                    {action.icon}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-semibold text-ink-800">{action.label}</span>
-                    <span className="block truncate text-[11px] text-ink-400">{action.description}</span>
-                  </span>
-                  <IconChevronRight
-                    size={15}
-                    className="shrink-0 text-ink-300 transition group-hover:translate-x-0.5 group-hover:text-brand-500"
-                  />
-                </Link>
-              ))}
-            </div>
-          </Card>
+          </section>
 
-          <div className="relative overflow-hidden rounded-2xl bg-ink-950 p-5 text-white shadow-card">
-            <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-              <div className="absolute -right-12 -top-12 h-36 w-36 rounded-full bg-brand-500/30 blur-3xl" />
-              <div className="absolute -bottom-16 -left-10 h-40 w-40 rounded-full bg-jade-500/15 blur-3xl" />
+          <section aria-labelledby="activity-heading">
+            <div className="mb-2 flex items-baseline justify-between gap-3">
+              <h2 id="activity-heading" className="text-base font-semibold text-ink-950">
+                Recent activity
+              </h2>
+              <Link to="/admin/audit" className="text-sm text-ink-700 underline-offset-4 hover:underline">
+                Audit log
+              </Link>
             </div>
-            <div className="relative">
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/35">
-                  System status
-                </span>
-                <IconActivity size={15} className="text-jade-300" />
-              </div>
-              <p className="mt-3 font-display text-lg font-semibold">
-                {activeRooms > 0
-                  ? `${activeRooms} room${activeRooms === 1 ? "" : "s"} live`
-                  : "Everything is quiet"}
-              </p>
-              <p className="mt-1.5 text-[12px] leading-relaxed text-white/45">
-                {activeRooms > 0
-                  ? "Participants can score open rounds right now."
-                  : "Activate a room when you're ready to start evaluating."}
-              </p>
-              <div className="mt-4 flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5">
-                <ConnectionDot dark />
-                <Link
-                  to="/admin/rooms"
-                  className="text-[11px] font-semibold text-brand-200 transition hover:text-white"
-                >
-                  Room management
-                </Link>
-              </div>
+            <div className="rounded-[10px] border border-line">
+              {auditQ.isLoading ? (
+                <div className="space-y-3 p-4">
+                  {[0, 1, 2, 3].map((i) => (
+                    <Skeleton key={i} className="h-4 w-full" />
+                  ))}
+                </div>
+              ) : auditQ.isError ? (
+                <p className="px-4 py-3.5 text-sm text-ink-700">Couldn't load activity.</p>
+              ) : (
+                <ul>
+                  {(auditQ.data?.logs ?? []).slice(0, 5).map((log) => (
+                    <li key={log.id} className="flex items-baseline justify-between gap-3 border-b border-rule px-4 py-3 last:border-0">
+                      <span className="min-w-0 truncate text-sm text-ink-900">
+                        <span className="font-medium">{log.actor?.username ?? "system"}</span>{" "}
+                        <span className="text-ink-600">{describe(log.action)}</span>
+                      </span>
+                      <time className="num shrink-0 text-xs text-ink-500" dateTime={log.createdAt}>
+                        {timeAgo(log.createdAt)}
+                      </time>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
-          </div>
-
-          <div className="rounded-2xl border border-brand-100 bg-brand-50/60 p-4">
-            <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-brand-600">
-              <IconSparkles size={13} />
-              Good to know
-            </p>
-            <p className="mt-2 text-[12px] leading-relaxed text-ink-600">
-              Results stay hidden from participants until you publish them. Use the live dashboard
-              to monitor turnout before closing a round.
-            </p>
-            <Link
-              to="/admin/rooms"
-              className="mt-3 inline-flex items-center gap-1 text-[12px] font-semibold text-brand-700 hover:text-brand-800"
-            >
-              Open live dashboards
-              <IconChart size={13} />
-            </Link>
-          </div>
+          </section>
         </aside>
       </div>
     </>
   );
+}
+
+/** Turnout as a true-ratio bar in the brand hue, with the figures beside it. */
+function Turnout({ voted, eligible }: { voted: number; eligible: number }) {
+  const pct = eligible ? Math.round((voted / eligible) * 100) : 0;
+  return (
+    <span className="flex items-center gap-3">
+      <span
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={eligible}
+        aria-valuenow={voted}
+        aria-label={`${voted} of ${eligible} voted`}
+        className="h-2 flex-1 overflow-hidden rounded-full bg-ink-100"
+      >
+        <span className="block h-full rounded-full bg-brand-500" style={{ width: `${pct}%` }} />
+      </span>
+      <span className="num shrink-0 whitespace-nowrap text-right text-sm text-ink-900">
+        {voted}
+        <span className="text-ink-500"> of {eligible}</span>
+      </span>
+    </span>
+  );
+}
+
+const ACTIONS: Record<string, string> = {
+  "auth.login": "signed in",
+  "auth.login_failed": "failed to sign in",
+  "auth.lockout": "was locked out",
+  "auth.password_changed": "changed their password",
+  "vote.submit": "voted",
+  "vote.edit": "edited a vote",
+  "round.open": "opened voting",
+  "round.pause": "paused voting",
+  "round.resume": "resumed voting",
+  "round.close": "closed a round",
+  "round.reopen": "re-opened a round",
+  "round.team_selected": "picked the presenting team",
+  "round.team_reselected": "re-presented a team",
+  "results.publish": "published results",
+  "results.unpublish": "unpublished results",
+  "room.create": "created a room",
+  "room.update": "edited a room",
+  "room.status": "changed a room's status",
+};
+const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
+const describe = (action: string) => ACTIONS[action] ?? action.replace(/[._]/g, " ");
+
+function timeAgo(iso: string) {
+  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }

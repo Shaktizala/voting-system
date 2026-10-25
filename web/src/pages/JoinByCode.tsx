@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { Button, Card, ErrorBox } from "../components/ui";
 import { Spinner } from "../components/Spinner";
-import { IconArrowLeft, IconKey, IconLock } from "../components/icons";
+import { IconArrowLeft, IconLock } from "../components/icons";
 
 /** Auto-joins via invite link /join/:code, then enters the room. */
 export default function JoinByCode() {
@@ -20,12 +20,9 @@ export default function JoinByCode() {
 
   return (
     <div className="flex min-h-[60vh] items-center justify-center py-6">
-      <Card className="w-full max-w-md overflow-hidden p-6 text-center shadow-lift sm:p-8">
+      <Card className="w-full max-w-md overflow-hidden p-6 text-center sm:p-8">
         <div className="flex items-center justify-center gap-2">
-          <span className="grid h-10 w-10 place-items-center rounded-xl bg-brand-50 text-brand-600 ring-1 ring-inset ring-brand-100">
-            <IconKey size={18} />
-          </span>
-          <span className="rounded-full bg-ink-100 px-2.5 py-1 font-mono text-[11px] font-semibold tracking-[0.16em] text-ink-600">
+          <span className="rounded-full bg-ink-100 px-2.5 py-1 font-mono text-xs tracking-[0.16em] text-ink-700" /* taste-skill-ignore: a join code is a key */>
             {code?.toUpperCase()}
           </span>
         </div>

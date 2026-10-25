@@ -28,3 +28,6 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# design-skill working files (screenshots, reports)
+.taste-skill/

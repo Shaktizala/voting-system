@@ -13,9 +13,10 @@ import {
   SectionHeading,
   Skeleton,
   StatCard,
+  StatStrip,
 } from "../../components/ui";
 import { useToast } from "../../contexts/Toast";
-import { IconPlus, IconTeams, IconUsers, IconLayers } from "../../components/icons";
+import { IconTeams, IconUsers, } from "../../components/icons";
 
 function initials(name: string) {
   return name
@@ -62,26 +63,25 @@ export default function Teams() {
   return (
     <>
       <PageTitle
-        eyebrow="Organization"
+
         title="Teams"
         subtitle="Organization-level teams, linked to rooms one event at a time."
       />
 
-      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <StatCard label="Teams" value={listQ.isLoading ? <Skeleton className="h-8 w-10" /> : teams.length} icon={<IconTeams size={19} />} tone="brand" />
-        <StatCard label="Members" value={listQ.isLoading ? <Skeleton className="h-8 w-10" /> : totalMembers} icon={<IconUsers size={19} />} tone="jade" />
-        <StatCard label="Projects showcased" value={listQ.isLoading ? <Skeleton className="h-8 w-10" /> : projects} icon={<IconLayers size={19} />} tone="ocean" />
+      <div className="mb-6">
+          <StatStrip columns={3}>
+        <StatCard label="Teams" value={listQ.isLoading ? <Skeleton className="h-7 w-10" /> : teams.length} />
+        <StatCard label="Members" value={listQ.isLoading ? <Skeleton className="h-7 w-10" /> : totalMembers} />
+        <StatCard label="Projects showcased" value={listQ.isLoading ? <Skeleton className="h-7 w-10" /> : projects} />
+          </StatStrip>
       </div>
 
       <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.5fr)]">
         <Card className="xl:sticky xl:top-6">
           <div className="flex items-start gap-3">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 ring-1 ring-inset ring-brand-100">
-              <IconPlus size={19} />
-            </span>
             <div>
               <h2 className="font-display text-base font-semibold text-ink-900">New team</h2>
-              <p className="mt-0.5 text-xs text-ink-500">Create the team once, link it to any room.</p>
+              <p className="mt-0.5 text-[13px] text-ink-500">Create the team once, link it to any room.</p>
             </div>
           </div>
           <div className="mt-5 space-y-3">
@@ -122,7 +122,7 @@ export default function Teams() {
                 <tr key={team.id}>
                   <td className="px-4 py-3.5">
                     <div className="flex items-center gap-2.5">
-                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-brand-100 to-brand-200 text-[10px] font-bold text-brand-700">
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-ink-100 text-[13px] font-medium text-ink-800">
                         {initials(team.name)}
                       </span>
                       <span className="font-medium text-ink-900">{team.name}</span>
@@ -132,11 +132,11 @@ export default function Teams() {
                     {team.projectTitle ? (
                       <span className="line-clamp-1">{team.projectTitle}</span>
                     ) : (
-                      <span className="text-xs text-ink-400">—</span>
+                      <span className="text-[13px] text-ink-400">—</span>
                     )}
                   </td>
                   <td className="px-4 py-3.5">
-                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-ink-50 px-2 py-1 text-xs font-medium text-ink-600 ring-1 ring-inset ring-line">
+                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-ink-50 px-2 py-1 text-[13px] font-medium text-ink-600 ring-1 ring-inset ring-line">
                       <IconUsers size={12} className="text-ink-400" />
                       {team._count?.members ?? 0}
                     </span>
@@ -144,7 +144,7 @@ export default function Teams() {
                   <td className="px-4 py-3.5">
                     <Button
                       variant="dangerGhost"
-                      className="px-2 py-1.5 text-xs"
+                      className="px-2 py-1.5 text-[13px]"
                       onClick={() => setConfirmDelete(team)}
                     >
                       Delete

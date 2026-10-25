@@ -381,7 +381,7 @@ export default function Participants() {
                       variant="secondary"
                       className="mt-1"
                       onClick={async () => {
-                        const b = await download(`/participants/credentials-sheet?format=csv&data=${btoa(JSON.stringify(credentials))}`);
+                        const b = await download("/participants/credentials-sheet", { format: "csv", credentials });
                         saveBlob(b.blob, b.filename);
                       }}
                     >

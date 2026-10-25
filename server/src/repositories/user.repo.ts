@@ -5,11 +5,17 @@ export const userRepo = {
   findById(id: string) {
     return prisma.user.findFirst({ where: { id, deletedAt: null } });
   },
+  /** Login only: the one lookup that reads the password hash. */
   findByIdentifier(identifier: string) {
     const ident = identifier.trim().toLowerCase();
     return prisma.user.findFirst({
       where: { deletedAt: null, OR: [{ email: ident }, { username: ident }] },
+      omit: { passwordHash: false },
     });
+  },
+  /** Password change only. */
+  findByIdWithPassword(id: string) {
+    return prisma.user.findFirst({ where: { id, deletedAt: null }, omit: { passwordHash: false } });
   },
   findByUsername(username: string) {
     return prisma.user.findFirst({ where: { username, deletedAt: null } });
@@ -39,6 +45,10 @@ export const userRepo = {
       data,
       include: { team: { select: { id: true, name: true } } },
     });
+  },
+  /** Compare-and-set: only replaces the hash if it is still `expected` (a concurrent change wins). */
+  replacePasswordHashIf(id: string, expected: string, passwordHash: string) {
+    return prisma.user.updateMany({ where: { id, passwordHash: expected }, data: { passwordHash } });
   },
   softDelete(id: string) {
     return prisma.user.update({ where: { id }, data: { deletedAt: new Date(), status: "INACTIVE" } });

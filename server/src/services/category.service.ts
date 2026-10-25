@@ -17,7 +17,7 @@ interface CategoryInput {
   isRequired: boolean;
 }
 
-type CategoryUpdateInput = Partial<CategoryInput>;
+type CategoryUpdateInput = Partial<CategoryInput> & { active?: boolean };
 
 export const categoryService = {
   async listForRoom(roomId: string, includeInactive = false) {
@@ -50,11 +50,13 @@ export const categoryService = {
       patch.maxScore !== undefined ||
       patch.step !== undefined ||
       patch.weight !== undefined ||
-      patch.isRequired !== undefined;
+      patch.isRequired !== undefined ||
+      patch.active === false; // removing a category from the ballot changes every later vote
 
     if (isStructural) {
       const hasVotes = (await categoryRepo.countVotesInRoom(category.roomId)) > 0;
-      if (hasVotes) throw conflict("Scoring ranges are locked once voting has started. Start a new configuration version instead.");
+      if (hasVotes) throw conflict("Categories are locked once voting has started. Start a new configuration version instead.");
+      await assertUnlocked(category.roomId);
       validateRange({
         minScore: (patch.minScore as number | undefined) ?? category.minScore,
         maxScore: (patch.maxScore as number | undefined) ?? category.maxScore,

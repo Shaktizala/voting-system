@@ -1,5 +1,6 @@
 import type { Server } from "socket.io";
-import { ROOM_CHANNEL, type RTResultsPublished, type RTPresentingPayload, type RTStatePayload, type RTVoteCountPayload } from "@voting/shared";
+import { snapshotCache } from "../utils/snapshotCache";
+import { MOD_CHANNEL, ROOM_CHANNEL, type RTResultsPublished, type RTPresentingPayload, type RTStatePayload, type RTVoteCountPayload } from "@voting/shared";
 
 let io: Server | null = null;
 
@@ -12,6 +13,7 @@ export function getIo(): Server | null {
 }
 
 export function emitToRoom<T>(roomId: string, event: string, payload: T) {
+  snapshotCache.invalidate(roomId);
   if (!io) return;
   io.to(ROOM_CHANNEL(roomId)).emit(event, payload);
 }
@@ -37,8 +39,8 @@ export const rtEvents = {
     emitToRoom(roomId, "voting:closed", { roundId });
   },
   voteSubmitted(roomId: string, payload: RTVoteCountPayload) {
-    // admin/moderator-only rooms join a separate privileged channel
-    emitToRoom(`mod:${roomId}`, "vote:submitted", payload);
+    // privileged channel: admins + this room's moderators (see realtime/index.ts)
+    io?.to(MOD_CHANNEL(roomId)).emit("vote:submitted", payload);
   },
   resultsPublished(roomId: string, payload: RTResultsPublished) {
     emitToRoom(roomId, "results:published", payload);

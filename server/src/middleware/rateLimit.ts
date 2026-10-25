@@ -6,6 +6,9 @@ import { isTest } from "../config";
 
 const testAware = (limit: number) => (isTest ? 100_000 : limit);
 
+/** One normalisation for every identifier key, matching the login lookup (trim + lowercase). */
+const normalise = (identifier: string) => identifier.trim().toLowerCase();
+
 /**
  * Participants at a live event usually share one venue/NAT IP, so per-IP limits
  * would throttle everybody at once. Authenticated traffic is therefore keyed by
@@ -22,8 +25,7 @@ function ipKey(req: Request): string {
 
 /** Login is keyed by the attempted account so a shared NAT can't lock out others. */
 export function loginKey(req: Request): string {
-  const identifier =
-    typeof req.body?.identifier === "string" ? req.body.identifier.trim().toLowerCase() : "";
+  const identifier = typeof req.body?.identifier === "string" ? normalise(req.body.identifier) : "";
   return identifier ? `login:${identifier}` : ipKey(req);
 }
 
@@ -55,14 +57,20 @@ export const anonLimiter = rateLimit({
   skip: (req) => !!req.user || req.path === "/auth/login",
 });
 
-/** Strict limiter for /auth/login — per account (shared IP no longer blocks). */
+/**
+ * /auth/login — per account (shared IP no longer blocks). Only *failed*
+ * attempts count: otherwise anyone could lock a participant out for the whole
+ * window by sending requests with their username. An admin password reset
+ * clears it (see clearLockout).
+ */
 export const loginLimiter = rateLimit({
   windowMs: 15 * 60_000,
-  limit: testAware(20), // per account identifier; per-account lockout below
+  limit: testAware(20),
   standardHeaders: "draft-7",
   legacyHeaders: false,
   keyGenerator: loginKey,
-  handler: (_req, _res, next) => next(tooMany()),
+  skipSuccessfulRequests: true,
+  handler: (_req, _res, next) => next(tooMany("Too many failed sign-in attempts. Try again later, or ask an admin to reset your password.")),
 });
 
 /** Vote + join endpoints: burst protection, per user. */
@@ -75,29 +83,38 @@ export const writeLimiter = rateLimit({
   handler: (_req, _res, next) => next(tooMany("Too many requests, slow down")),
 });
 
+/** Room join codes: 10 attempts / 5 minutes per user (shared Wi-Fi must not block). */
+export const joinLimiter = rateLimit({
+  windowMs: 5 * 60_000,
+  limit: testAware(10),
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  keyGenerator: userKey,
+  handler: (_req, _res, next) => next(tooMany("Too many join attempts")),
+});
+
 /**
- * Per-account lockout: 5 consecutive failures per identifier (case-insensitive)
- * per IP within 15 minutes → locked for 15 minutes. Audited.
- * In-memory by design for single instance; the Redis-rate-limiter adapter
- * (socket.io-redis / rate-limit-redis) can be plugged in without API changes.
+ * Fast lockout for one guesser: 10 failures for one identifier from one IP
+ * within 15 minutes locks that pair for 5 minutes (audited). Other people on
+ * the same venue IP are unaffected; guessing spread across IPs is capped
+ * account-wide by loginLimiter. An admin password reset clears both.
  */
 const failures = new Map<string, { count: number; firstAt: number; lockedUntil: number }>();
 const WINDOW = 15 * 60_000;
-const MAX_FAILURES = 5;
+const LOCK_MS = 5 * 60_000;
+const MAX_FAILURES = 10;
 
-function key(identifier: string, ip: string) {
-  return `${ip}|${identifier.toLowerCase()}`;
-}
+const lockKey = (identifier: string, ip: string) => `${ip}|${normalise(identifier)}`;
 
 export function checkAccountLockout(identifier: string, ip: string) {
-  const entry = failures.get(key(identifier, ip));
+  const entry = failures.get(lockKey(identifier, ip));
   if (entry && entry.lockedUntil > Date.now()) {
-    throw tooMany("Account temporarily locked due to failed login attempts");
+    throw tooMany("Account temporarily locked due to failed login attempts. Try again in a few minutes.");
   }
 }
 
 export function recordLoginFailure(identifier: string, ip: string) {
-  const k = key(identifier, ip);
+  const k = lockKey(identifier, ip);
   const now = Date.now();
   const entry = failures.get(k);
   if (!entry || now - entry.firstAt > WINDOW) {
@@ -105,8 +122,8 @@ export function recordLoginFailure(identifier: string, ip: string) {
     return;
   }
   entry.count += 1;
-  if (entry.count >= MAX_FAILURES) {
-    entry.lockedUntil = now + WINDOW;
+  if (entry.count >= MAX_FAILURES && entry.lockedUntil <= now) {
+    entry.lockedUntil = now + LOCK_MS;
     audit({
       action: "auth.lockout",
       entityType: "user",
@@ -117,15 +134,22 @@ export function recordLoginFailure(identifier: string, ip: string) {
 }
 
 export function recordLoginSuccess(identifier: string, ip: string) {
-  failures.delete(key(identifier, ip));
+  failures.delete(lockKey(identifier, ip));
 }
 
-/** Room join codes: 10 attempts / 5 minutes per user (shared Wi-Fi must not block). */
-export const joinLimiter = rateLimit({
-  windowMs: 5 * 60_000,
-  limit: testAware(10),
-  standardHeaders: "draft-7",
-  legacyHeaders: false,
-  keyGenerator: userKey,
-  handler: (_req, _res, next) => next(tooMany("Too many join attempts")),
-});
+/** Lifts every lockout for these identifiers (username/email): all IPs, and the per-account limiter. */
+export function clearLockout(...identifiers: string[]) {
+  const ids = new Set(identifiers.map(normalise));
+  for (const k of failures.keys()) {
+    if (ids.has(k.slice(k.indexOf("|") + 1))) failures.delete(k);
+  }
+  for (const id of ids) void loginLimiter.resetKey(`login:${id}`);
+}
+
+// keep the map bounded: forget windows that have fully expired
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, e] of failures) {
+    if (now - e.firstAt > WINDOW && e.lockedUntil < now) failures.delete(k);
+  }
+}, 60_000).unref?.();

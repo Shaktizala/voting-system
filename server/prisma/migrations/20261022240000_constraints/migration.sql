@@ -23,13 +23,6 @@ CREATE TRIGGER trg_vote_score_range
   BEFORE INSERT OR UPDATE ON "VoteScore"
   FOR EACH ROW EXECUTE FUNCTION check_vote_score();
 
--- 2. A vote's round must be in the same room (composite FK already enforces
---    round↔vote room equality). Additionally, the target team must be linked
---    to the room (composite FK on (teamId, roomId) enforces this).
---    Belt-and-braces check:
-ALTER TABLE "VoteScore" ADD CONSTRAINT vote_score_room_fk
-  FOREIGN KEY ("roomId") REFERENCES "Room"("id") ON DELETE CASCADE;
-
 -- 3. Self-vote prevention: a voter whose room-membership team equals the
 --    vote's team is rejected.
 CREATE OR REPLACE FUNCTION check_no_self_vote() RETURNS trigger AS $$

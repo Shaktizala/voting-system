@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import argon2 from "argon2";
+import { hashPassword } from "../src/utils/password";
 
 const prisma = new PrismaClient();
 
@@ -7,7 +7,7 @@ async function main() {
   console.log("Seeding…");
 
   // ---------------------------------------------------------------- admin
-  const adminHash = await argon2.hash("Admin123!", { type: argon2.argon2id });
+  const adminHash = await hashPassword("Admin123!");
   const admin = await prisma.user.upsert({
     where: { username: "admin" },
     update: {},
@@ -35,7 +35,7 @@ async function main() {
   }
 
   // ------------------------------------------------------- moderators & participants
-  const modHash = await argon2.hash("Modordion123!", { type: argon2.argon2id });
+  const modHash = await hashPassword("Modordion123!");
   const mod = await prisma.user.upsert({
     where: { username: "moderator1" },
     update: {},
@@ -59,7 +59,7 @@ async function main() {
     { name: "Femi Ade", username: "femi", email: "femi@example.org", team: "Team Gamma" },
     { name: "Gita Rao", username: "gita", email: "gita@example.org", team: null }, // judge, no team
   ];
-  const defaultHash = await argon2.hash("Participant123!", { type: argon2.argon2id });
+  const defaultHash = await hashPassword("Participant123!");
   const users: Record<string, { id: string; username: string; teamId: string | null }> = {};
   for (const p of participantData) {
     const u = await prisma.user.upsert({
@@ -117,8 +117,8 @@ async function main() {
     });
 
     const participantTeamIds = teamNames.slice(0, 3);
-    for (const teamName of participantTeamIds) {
-      await prisma.roomTeam.create({ data: { roomId: room.id, teamId: teams[teamName].id, presentationOrder: 0 } });
+    for (const [i, teamName] of participantTeamIds.entries()) {
+      await prisma.roomTeam.create({ data: { roomId: room.id, teamId: teams[teamName].id, presentationOrder: i + 1 } });
     }
     // admins see everything; moderator + participants below
     await prisma.roomTeam.update({

@@ -10,6 +10,14 @@ const envSchema = z.object({
   REDIS_URL: z.string().optional(),
   IMPORT_MAX_FILE_MB: z.coerce.number().default(5),
   IMPORT_MAX_ROWS: z.coerce.number().default(5000),
+  /**
+   * Express "trust proxy": which hops may set X-Forwarded-For. Default trusts
+   * only a reverse proxy on the same host (loopback). Private ranges are NOT
+   * trusted by default: at a venue the attendees themselves are on 192.168.x /
+   * 10.x and could otherwise spoof their IP. Behind a load balancer, set its
+   * subnet or a hop count ("1"); never "true" on an internet-facing API.
+   */
+  TRUST_PROXY: z.string().default("loopback"),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -22,3 +30,11 @@ if (!parsed.success) {
 export const env = parsed.data;
 export const isProd = env.NODE_ENV === "production";
 export const isTest = env.NODE_ENV === "test";
+
+export function trustProxySetting(): boolean | number | string {
+  const v = env.TRUST_PROXY.trim();
+  if (v === "true") return true;
+  if (v === "false") return false;
+  if (/^\d+$/.test(v)) return Number(v);
+  return v;
+}

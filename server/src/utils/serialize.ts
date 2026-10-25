@@ -4,14 +4,18 @@
  * for authentication; only responses pass through here.
  */
 
-/** Removes `passwordHash` from a user record. */
-export function publicUser<T extends { passwordHash?: unknown }>(user: T): Omit<T, "passwordHash"> {
-  const { passwordHash: _passwordHash, ...safe } = user;
+/**
+ * Removes `passwordHash` from a user record. The Prisma client already omits it
+ * from every query (db.ts); this stays as a second guard on response paths, so
+ * it accepts records with or without the field.
+ */
+export function publicUser<T extends object>(user: T): Omit<T, "passwordHash"> {
+  const { passwordHash: _passwordHash, ...safe } = user as T & { passwordHash?: unknown };
   void _passwordHash;
   return safe;
 }
 
 /** Applies {@link publicUser} across a list of records. */
-export function publicUsers<T extends { passwordHash?: unknown }>(users: T[]): Omit<T, "passwordHash">[] {
+export function publicUsers<T extends object>(users: T[]): Omit<T, "passwordHash">[] {
   return users.map((user) => publicUser(user));
 }

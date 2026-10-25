@@ -10,6 +10,9 @@ export const sessionRepo = {
       include: { user: true },
     });
   },
+  extend(id: string, expiresAt: Date) {
+    return prisma.session.update({ where: { id }, data: { expiresAt } });
+  },
   delete(tokenHash: string) {
     return prisma.session.deleteMany({ where: { tokenHash } });
   },

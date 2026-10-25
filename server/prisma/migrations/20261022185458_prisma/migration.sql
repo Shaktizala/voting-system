@@ -1,2 +1,2 @@
 -- DropForeignKey
-ALTER TABLE "VoteScore" DROP CONSTRAINT "vote_score_room_fk";
+ALTER TABLE "VoteScore" DROP CONSTRAINT IF EXISTS "vote_score_room_fk";

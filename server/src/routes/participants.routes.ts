@@ -3,6 +3,7 @@ import multer from "multer";
 import { participantService } from "../services/participant.service";
 import { requireAuth, requirePermission } from "../middleware/auth";
 import { participantCreateSchema, participantPatchSchema } from "@voting/shared";
+import { z } from "zod";
 import { wrap, parseBody } from "./helpers";
 import { badRequest } from "../utils/errors";
 
@@ -17,6 +18,14 @@ const upload = multer({
 });
 
 const r = Router();
+
+const credentialsSheetSchema = z.object({
+  format: z.enum(["csv", "xlsx"]).default("csv"),
+  credentials: z
+    .array(z.object({ name: z.string(), username: z.string(), email: z.string(), temporaryPassword: z.string() }))
+    .min(1)
+    .max(10_000),
+});
 
 r.use(requireAuth);
 r.use(requirePermission("participants:read"));
@@ -65,11 +74,10 @@ r.get("/import/template", requirePermission("participants:write"), wrap(async (r
   return res.attachment(t.filename).type(t.contentType).send(Buffer.from(buf as ArrayBuffer));
 }));
 
-r.get("/credentials-sheet", requirePermission("participants:credentials"), wrap(async (req, res) => {
-  const raw = req.query.data as string | undefined;
-  if (!raw) throw badRequest("Missing credentials data");
-  const credentials = JSON.parse(Buffer.from(raw, "base64").toString("utf8")) as { name: string; username: string; email: string; temporaryPassword: string }[];
-  const kind = (req.query.format === "xlsx" ? "xlsx" : "csv") as "csv" | "xlsx";
+/** POST, not GET: temporary passwords must never travel in a URL (logs, history, proxies). */
+r.post("/credentials-sheet", requirePermission("participants:credentials"), wrap(async (req, res) => {
+  const { credentials, format } = parseBody(credentialsSheetSchema, req.body);
+  const kind = format;
   const sheet = await participantService.buildCredentialsSheet(credentials, kind);
   res.attachment(sheet.filename).type(sheet.contentType).send(sheet.buffer);
 }));

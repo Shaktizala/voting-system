@@ -86,9 +86,9 @@ describe("authentication and RBAC", () => {
     expect((body as any).error).toBe("Invalid credentials");
   });
 
-  it("locks the account after 5 failed logins", async () => {
+  it("locks the account after 10 failed logins", async () => {
     const u = await makeUser("PARTICIPANT");
-    for (let i = 0; i < 5; i++) await login(u.username, "nope");
+    for (let i = 0; i < 10; i++) await login(u.username, "nope");
     const { status } = await login(u.username, PASSWORD);
     expect(status).toBe(429);
   });
@@ -434,13 +434,15 @@ describe("result calculation: weights, normalization, missing votes, trimmed mea
       await addMembership(room.id, v.id, null);
       voters.push(v);
     }
-    const r1 = await openRound(room.id, t1.id);
-    const r2 = await openRound(room.id, t2.id);
     // T1 scores: C1: 10,8,6,4 → avg 7 → norm .7; C2: 4,2 → avg 3 → norm .75
     const c1 = cats[0].id, c2 = cats[1].id;
     const t1scores: Record<string, number[]> = { [c1]: [10, 8, 6, 4], [c2]: [4, 2] };
     const t2scores: Record<string, number[]> = { [c1]: [2, 4, 6, 8], [c2]: [2, 2, 2, 3] };
+    // one live round per room: present T1, close it, then present T2
+    const r1 = await openRound(room.id, t1.id);
     await seedVotes(r1.id, voters, room.id, t1.id, cats, t1scores);
+    await prisma.votingRound.update({ where: { id: r1.id }, data: { status: "CLOSED", closedAt: new Date() } });
+    const r2 = await openRound(room.id, t2.id);
     await seedVotes(r2.id, voters, room.id, t2.id, cats, t2scores);
 
     const { j } = await login(admin.username);

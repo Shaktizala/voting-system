@@ -11,6 +11,8 @@ import { parse } from "papaparse";
 import ExcelJS from "exceljs";
 import { plainify } from "../utils/plainify";
 import { publicUser, publicUsers } from "../utils/serialize";
+import { prisma } from "../db";
+import { clearLockout } from "../middleware/rateLimit";
 import type { Prisma } from "@prisma/client";
 
 export interface TempCredential {
@@ -55,6 +57,13 @@ export const participantService = {
   async patch(id: string, patch: Record<string, unknown>, actorId: string, ip?: string) {
     const user = await userRepo.findById(id);
     if (!user) throw notFound("Participant not found");
+
+    const losesAdmin =
+      user.role === "ADMIN" &&
+      (patch.softDelete === true ||
+        (typeof patch.role === "string" && patch.role !== "ADMIN") ||
+        patch.status === "INACTIVE");
+    if (losesAdmin) await assertAnotherActiveAdmin(id);
 
     if (patch.softDelete === true) {
       await userRepo.softDelete(id);
@@ -112,6 +121,7 @@ export const participantService = {
     const passwordHash = await authService.hashPassword(tempPassword);
     await userRepo.update(id, { passwordHash, mustChangePassword: true });
     await sessionRepo.deleteAllForUser(id);
+    clearLockout(user.username, user.email); // a locked-out participant can sign in right away
     audit({ actorId, action: "participant.reset_password", entityType: "user", entityId: id, ip });
     return { username: user.username, email: user.email, name: user.name, temporaryPassword: tempPassword };
   },
@@ -323,4 +333,12 @@ async function parseFile(buffer: Buffer<ArrayBufferLike>, filename: string): Pro
     if (hasContent) rows.push(obj as unknown as ParsedRow);
   }
   return rows;
+}
+
+/** Never leave the system without an active admin (demote / deactivate / delete). */
+async function assertAnotherActiveAdmin(userId: string) {
+  const others = await prisma.user.count({
+    where: { role: "ADMIN", status: "ACTIVE", deletedAt: null, id: { not: userId } },
+  });
+  if (others === 0) throw conflict("This is the only active admin. Promote another admin first.");
 }

@@ -104,6 +104,8 @@ export default function Teams() {
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  // a double-click must not start a second, concurrent import
+  const [committing, setCommitting] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -136,7 +138,8 @@ export default function Teams() {
   };
 
   const runCommit = async () => {
-    if (!importFile) return;
+    if (!importFile || committing) return;
+    setCommitting(true);
     try {
       setImportError(null);
       const data = (await upload("/teams/import/commit", importFile, {
@@ -164,6 +167,8 @@ export default function Teams() {
       }
     } catch (e) {
       setImportError(e instanceof ApiError ? e.message : "Import failed");
+    } finally {
+      setCommitting(false);
     }
   };
 
@@ -402,9 +407,10 @@ export default function Teams() {
                   <Button
                     className="mt-3 w-full"
                     onClick={runCommit}
-                    disabled={preview.validTeamCount === 0 || (preview.errorCount > 0 && allOrNothing)}
+                    disabled={committing || preview.validTeamCount === 0 || (preview.errorCount > 0 && allOrNothing)}
+                    aria-busy={committing}
                   >
-                    Import {preview.validTeamCount} team{preview.validTeamCount === 1 ? "" : "s"} · {preview.validParticipantCount} participant{preview.validParticipantCount === 1 ? "" : "s"}
+                    {committing ? "Importing…" : <>Import {preview.validTeamCount} team{preview.validTeamCount === 1 ? "" : "s"} · {preview.validParticipantCount} participant{preview.validParticipantCount === 1 ? "" : "s"}</>}
                   </Button>
                 </div>
               )}
@@ -445,6 +451,12 @@ export default function Teams() {
                           <p className="mt-1 text-[12px]">Showing the first 20 failed rows.</p>
                         )}
                       </div>
+                    )}
+                    {importResult.participantsCreated > 0 && importResult.credentials.length === 0 && (
+                      <p>
+                        No passwords to share: new participants sign in with <strong>Continue with Google</strong> using
+                        the email they registered with.
+                      </p>
                     )}
                     {importResult.credentials.length > 0 && (
                       <>

@@ -549,26 +549,26 @@ export const teamImportService = {
             if (clash.length > 0) {
               throw new Error("Username or email was taken by another request while importing");
             }
-            const temporaryPassword = authService.generateTemporaryPassword();
-            const passwordHash = await authService.hashPassword(temporaryPassword);
+            const { temporaryPassword, data: login } = await authService.initialCredentials(row.participant.role);
             const user = await userRepo.create({
               name: row.participant.name,
               username: row.participant.username,
               email: row.participant.email,
               role: row.participant.role,
               teamId: team.id,
-              passwordHash,
-              mustChangePassword: true,
+              ...login,
             });
             userId = user.id;
             participantsCreated++;
-            credentials.push({
-              name: row.participant.name,
-              username: row.participant.username,
-              email: row.participant.email,
-              temporaryPassword,
-              teamName: team.name,
-            });
+            if (temporaryPassword) {
+              credentials.push({
+                name: row.participant.name,
+                username: row.participant.username,
+                email: row.participant.email,
+                temporaryPassword,
+                teamName: team.name,
+              });
+            }
           }
 
           if (room) await attachRoomMember(room.id, userId, team.id);

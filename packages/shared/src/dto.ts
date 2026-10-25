@@ -17,6 +17,8 @@ export const changePasswordSchema = z.object({
   currentPassword: z.string().min(1),
   newPassword: z.string().min(10, "Minimum 10 characters").max(128),
 });
+/** First password for an account that so far only signs in with Google. */
+export const setPasswordSchema = changePasswordSchema.pick({ newPassword: true });
 
 /* ----------------------------- participants ---------------------------- */
 export const participantCreateSchema = z.object({

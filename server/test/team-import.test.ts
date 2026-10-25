@@ -310,3 +310,160 @@ describe("bulk team import", () => {
     expect(res.status).toBe(403);
   }, 30000);
 });
+
+/* ------------------------- sign-up form exports ------------------------- */
+
+const FORM_HEADER = [
+  "Timestamp",
+  "Email Address",
+  "Enter Your Team Name",
+  "email of Team Leader",
+  "email of team member 2",
+  "email of team member 3",
+  "email of team member 4",
+  "Idea Approved?",
+  "Idea Details",
+  "Column 1",
+];
+
+describe("bulk team import: one-row-per-team form exports", () => {
+  it("expands form rows, fixes what it can, and sets up a voting-ready room", async () => {
+    const { j } = await makeAdmin();
+    const tag = U("form").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const mail = (name: string) => `${name}.${tag}@form.example`;
+    const teamA = `Alpha ${tag}`;
+    const teamB = `Beta ${tag}`;
+    const teamC = `Gamma ${tag}`;
+
+    // an existing account with no team is reused; another owns the username "lead" would derive to
+    const reused = await prisma.user.create({
+      data: { name: "Already Here", username: `reused-${tag}`, email: mail("reused"), passwordHash: "x", role: "PARTICIPANT", mustChangePassword: false },
+    });
+    await prisma.user.create({
+      data: { name: "Name Clash", username: `lead.${tag}`, email: `someone-else-${tag}@form.example`, passwordHash: "x", role: "PARTICIPANT", mustChangePassword: false },
+    });
+
+    const file = csv(FORM_HEADER, [
+      ["10/25/2026 9:38", mail("lead"), `  ${teamA.replace(" ", "  ")} `, mail("lead"), mail("Amy").toUpperCase(), mail("reused"), "", "TRUE", "Explains repos with diagrams", ""],
+      ["10/25/2026 9:42", mail("sub"), teamB, "Some Name", mail("bea"), "N/a", "N/a", "TRUE", "Phishing URL detection", ""],
+      ["10/25/2026 9:50", mail("cal"), teamC, mail("cal"), mail("cid"), "", "", "FALSE", "Not picked", ""],
+    ]);
+
+    const preview = await uploadCall(j, "/teams/import/preview", form(file, { newRoomName: `Finals ${tag}` }));
+    expect(preview.status).toBe(200);
+    const p = preview.body;
+    expect(p.format).toBe("form-export");
+    expect(p.formatNotes.join(" ")).toContain("email of Team Leader");
+    expect(p.teamCount).toBe(3);
+    expect(p.validTeamCount).toBe(2); // Gamma: idea not approved
+    expect(p.newRoom).toMatchObject({ name: `Finals ${tag}`, status: "DRAFT" });
+    expect(p.newRoom.categories).toHaveLength(4);
+
+    const rowsA = p.rows.filter((r: any) => r.teamName === teamA);
+    expect(rowsA.map((r: any) => r.participant.email)).toEqual([mail("lead"), mail("amy"), mail("reused")]);
+    expect(rowsA[0].notes).toContain("Removed extra spaces from the team name");
+    expect(rowsA[0].participant.username).toBe(`lead.${tag}-2`); // base taken by another email
+    expect(rowsA[1].notes).toContain("Email lowercased");
+    expect(rowsA[2].participant.existingUserId).toBe(reused.id);
+
+    const rowsB = p.rows.filter((r: any) => r.teamName === teamB);
+    expect(rowsB.map((r: any) => r.participant.email)).toEqual([mail("sub"), mail("bea")]);
+    expect(rowsB[0].notes.join(" ")).toMatch(/Skipped the "N\/a" placeholder/);
+    expect(rowsB[0].notes.join(" ")).toMatch(/used the form submitter's email/);
+    expect(p.rows.filter((r: any) => r.teamName === teamC).every((r: any) => r.errors.includes("Idea not approved in the form"))).toBe(true);
+
+    const committed = await uploadCall(j, "/teams/import/commit", form(file, { newRoomName: `Finals ${tag}` }));
+    expect(committed.status).toBe(200);
+    const c = committed.body;
+    expect(c.teamsCreated).toBe(2);
+    expect(c.participantsCreated).toBe(4);
+    expect(c.participantsAssigned).toBe(1);
+    expect(c.room.created).toBe(true);
+
+    const room = await prisma.room.findUniqueOrThrow({ where: { id: c.room.id }, include: { categories: true, roomTeams: { include: { team: true } }, members: true } });
+    expect(room.status).toBe("DRAFT");
+    expect(room.categories.map((cat) => cat.name)).toEqual(["Innovation", "Technical depth", "Impact", "Presentation"]);
+    expect(room.roomTeams.sort((a, b) => a.presentationOrder - b.presentationOrder).map((rt) => rt.team.name)).toEqual([teamA, teamB]);
+    expect(room.members).toHaveLength(5);
+    const alpha = await prisma.team.findFirstOrThrow({ where: { name: teamA } });
+    expect(alpha.description).toBe("Explains repos with diagrams");
+    expect(room.members.filter((m) => m.teamId === alpha.id)).toHaveLength(3);
+
+    // ready to vote: activate, present Alpha, a Beta member votes; an Alpha member can't
+    expect((await call(j, "POST", `/rooms/${room.id}/status`, { status: "ACTIVE" })).status).toBe(200);
+    const sel = await call(j, "POST", `/rooms/${room.id}/rounds/select`, { teamId: alpha.id });
+    expect(sel.status).toBe(201);
+    expect((await call(j, "POST", `/rounds/${sel.body.round.id}/open`, {})).status).toBe(200);
+    const ballot = { scores: room.categories.map((cat) => ({ categoryId: cat.id, score: 7 })) };
+
+    const voterFor = async (email: string) => {
+      const cred = c.credentials.find((x: any) => x.email === email);
+      const { j: vj, status } = await login(cred.username, cred.temporaryPassword);
+      expect(status).toBe(200);
+      expect((await call(vj, "POST", "/auth/change-password", { currentPassword: cred.temporaryPassword, newPassword: "a-new-password-123" })).status).toBeLessThan(300);
+      return vj;
+    };
+    expect((await call(await voterFor(mail("bea")), "POST", `/rounds/${sel.body.round.id}/votes`, ballot)).status).toBe(201);
+    expect((await call(await voterFor(mail("amy")), "POST", `/rounds/${sel.body.round.id}/votes`, ballot)).status).toBe(403);
+  });
+
+  it("rejects choosing an existing room and a new room at once", async () => {
+    const { user: admin, j } = await makeAdmin();
+    const { room } = await setupRoom(admin.id, { categories: [{ name: "C1" }] });
+    const file = csv(FORM_HEADER, [["t", "a@b.co", U("Solo"), "a@b.co", "", "", "", "TRUE", "", ""]]);
+    const res = await uploadCall(j, "/teams/import/preview", form(file, { roomId: room.id, newRoomName: "Another" }));
+    expect(res.status).toBe(400);
+  });
+});
+
+async function call(j: ReturnType<typeof jar>, method: string, path: string, body?: unknown): Promise<{ status: number; body: any }> {
+  const res = await fetch(`${base}/api${path}`, {
+    method,
+    headers: { "Content-Type": "application/json", Cookie: j.header(), ...(method === "GET" ? {} : { "X-CSRF-Token": j.csrf() }) },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  return { status: res.status, body: res.headers.get("content-type")?.includes("json") ? await res.json() : await res.text() };
+}
+
+describe("deleted team names", () => {
+  it("frees a team's name when it is deleted", async () => {
+    const { j } = await makeAdmin();
+    const name = U("Phoenix");
+    const created = await call(j, "POST", "/teams", { name, links: [] });
+    expect(created.status).toBeLessThan(300);
+    expect((await call(j, "DELETE", `/teams/${created.body.team.id}`)).status).toBe(200);
+    const again = await call(j, "POST", "/teams", { name, links: [] });
+    expect(again.status).toBeLessThan(300);
+    const old = await prisma.team.findUniqueOrThrow({ where: { id: created.body.team.id } });
+    expect(old.name).toMatch(new RegExp(`^${name} \\(deleted [a-z0-9]{6}\\)$`));
+  });
+
+  it("re-imports over teams deleted before names were freed, unless they have voting history", async () => {
+    const { user: admin, j } = await makeAdmin();
+    // legacy state: deleted rows that still hold their exact names
+    const unused = await prisma.team.create({ data: { name: U("Legacy Unused"), deletedAt: new Date() } });
+    const used = await prisma.team.create({ data: { name: U("Legacy Used"), deletedAt: new Date() } });
+    const { room } = await setupRoom(admin.id, { categories: [{ name: "C1" }] });
+    await prisma.roomTeam.create({ data: { roomId: room.id, teamId: used.id, presentationOrder: 1 } });
+
+    // a hand-made team with a legacy-held name gets a clear 409, not a 500
+    expect((await call(j, "POST", "/teams", { name: unused.name, links: [] })).status).toBe(409);
+
+    const who = U("re").toLowerCase();
+    const file = csv(HEADER, [
+      [unused.name, "", "", "Re One", `${who}1@test.example`, `${who}1`, "PARTICIPANT"],
+      [used.name, "", "", "Re Two", `${who}2@test.example`, `${who}2`, "PARTICIPANT"],
+    ]);
+    const preview = await uploadCall(j, "/teams/import/preview", form(file));
+    const rowFor = (team: string) => preview.body.rows.find((r: any) => r.teamName === team);
+    expect(rowFor(unused.name).valid).toBe(true);
+    expect(rowFor(unused.name).notes.join(" ")).toContain("it is released");
+    expect(rowFor(used.name).errors.join(" ")).toContain("voting history");
+
+    const committed = await uploadCall(j, "/teams/import/commit", form(file));
+    expect(committed.body.teamsCreated).toBe(1);
+    expect((await prisma.team.findFirstOrThrow({ where: { id: unused.id } })).name).toContain("(deleted ");
+    expect(await prisma.team.findFirst({ where: { name: unused.name, deletedAt: null } })).toBeTruthy();
+    expect((await prisma.team.findFirstOrThrow({ where: { id: used.id } })).name).toBe(used.name);
+  });
+});

@@ -152,7 +152,14 @@ concurrency, config locking, result arithmetic and CSV injection escaping.
 2. **Teams** — organization teams; room teams control presentation order.
    Bulk import a CSV of teams and members (`team_name` repeated per participant),
    optionally linking every imported team to a room and adding those members to
-   that room in the same step.
+   that room in the same step. A sign-up **form export** (one row per team: a
+   team-name column plus member-email columns, e.g. Google Forms) works as-is:
+   names and usernames come from the emails, placeholders like `N/a` are
+   skipped, and every automatic fix is listed in the preview. Choosing
+   **Create a new room** sets up a draft room with starter categories (Innovation,
+   Technical depth, Impact, Presentation; editable until the first vote), so
+   after the import you only assign a moderator and **Activate**. Deleting a team
+   frees its name for re-import.
 3. **Rooms** — create a room (DRAFT), add categories (dynamic: name, min/max,
    step, weight, required), link teams, assign participants
    (RESTRICTED = assigned only; OPEN_WITH_CODE = anyone with the code joins and
